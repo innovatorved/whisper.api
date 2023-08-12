@@ -1,4 +1,4 @@
-# File: my-fastapi-project/app/tests/__init__.py
+# File: whisper.api/app/tests/__init__.py
 
 # Import necessary modules
 import pytest

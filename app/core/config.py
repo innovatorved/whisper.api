@@ -1,18 +1,24 @@
 from typing import Any, Dict, List, Optional, Union
-from pydantic import AnyHttpUrl, BaseSettings, validator
+from pydantic import AnyHttpUrl, validator
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from os import environ as env
 
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Whisper API"
-    SECRET_KEY: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    SERVER_NAME: str
-    SERVER_HOST: AnyHttpUrl
-    POSTGRES_SERVER: str
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_DB: str
+    PROJECT_VERSION: str = "0.1.0"
+    SECRET_KEY: str = env.get("SECRET_KEY")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = env.get("ACCESS_TOKEN_EXPIRE_MINUTES")
+    SERVER_NAME: str = env.get("SERVER_NAME")
+    SERVER_HOST: AnyHttpUrl = env.get("SERVER_HOST")
+    POSTGRES_SERVER: str = env.get("POSTGRES_SERVER")
+    POSTGRES_USER: str = env.get("POSTGRES_USER")
+    POSTGRES_PASSWORD: str = env.get("POSTGRES_PASSWORD")
+    POSTGRES_DB: str = env.get("POSTGRES_DB")
+    POSTGRES_DATABASE_URL: str = env.get("POSTGRES_DATABASE_URL")
+    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = ['http://localhost:3000']
 
     @validator("SECRET_KEY", pre=True)
     def secret_key_must_be_set(cls, v: Optional[str], values: Dict[str, Any]) -> str:
@@ -55,6 +61,13 @@ class Settings(BaseSettings):
         if not v:
             raise ValueError("POSTGRES_DB must be set")
         return v
+
+    @validator("POSTGRES_DATABASE_URL", pre=True)
+    def postgres_db_url_must_be_set(cls, v: Optional[str], values: Dict[str, Any]) -> str:
+        if not v:
+            raise ValueError("POSTGRES_DATABASE_URL must be set")
+        return v
+
 
 
 settings = Settings()

@@ -1,11 +1,11 @@
-# my-fastapi-project
+# whisper.api
 
 This is a production level project structure for a Python FastAPI project.
 
 ## Project Structure
 
 ```
-my-fastapi-project
+whisper.api
 ├── app
 │   ├── __init__.py
 │   ├── api
@@ -68,3 +68,10 @@ The project structure is organized as follows:
 - `requirements.txt`: specifies the Python dependencies.
 - `README.md`: this file.
 - `.vscode`: contains Visual Studio Code configuration files.
+
+
+## Run this Project
+
+```bash
+uvicorn app.main:app --reload
+```

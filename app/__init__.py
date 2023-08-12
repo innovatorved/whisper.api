@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.api import api_router
+from app.api import api_router
 from app.core.config import settings
 
 

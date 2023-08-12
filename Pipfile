@@ -5,7 +5,6 @@ name = "pypi"
 
 [packages]
 fastapi = "*"
-uvicorn = {extras = ["standard"], version = "*"}
 python-dotenv = "*"
 sqlalchemy = "*"
 psycopg2-binary = "*"
@@ -13,6 +12,7 @@ pytest = "*"
 pytest-cov = "*"
 faker = "*"
 requests-mock = "*"
+uvicorn = {extras = ["standard"], version = "*"}
 
 [dev-packages]
 

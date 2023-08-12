@@ -1,12 +1,14 @@
 from fastapi import APIRouter
 
 from app.api.models.user import UserInDB
-from app.api.db import database
+from app.core.database import SessionLocal
 
-users_router = r = APIRouter()
+database = SessionLocal()
+
+users_router = router = APIRouter()
 
 
-@r.post("/", response_model=UserInDB, status_code=201)
+@router.post("/", response_model=UserInDB, status_code=201)
 async def create_user(user: UserInDB):
     query = UserInDB.insert().values(
         username=user.username,
@@ -17,14 +19,14 @@ async def create_user(user: UserInDB):
     return {**user.dict(), "id": user_id}
 
 
-@r.get("/{id}/", response_model=UserInDB)
+@router.get("/{id}/", response_model=UserInDB)
 async def read_user(id: int):
     query = UserInDB.select().where(UserInDB.c.id == id)
     user = await database.fetch_one(query)
     return user
 
 
-@r.put("/{id}/", response_model=UserInDB)
+@router.put("/{id}/", response_model=UserInDB)
 async def update_user(id: int, user: UserInDB):
     query = (
         UserInDB
@@ -41,7 +43,7 @@ async def update_user(id: int, user: UserInDB):
     return {**user.dict(), "id": user_id}
 
 
-@r.delete("/{id}/", response_model=int)
+@router.delete("/{id}/", response_model=int)
 async def delete_user(id: int):
     query = UserInDB.delete().where(UserInDB.c.id == id)
     user_id = await database.execute(query)

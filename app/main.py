@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.api_v1.api import router as api_router
+from app.api import api_router
 from app.core.config import settings
 from app.core.errors import http_error_handler
 from app.core.errors import http422_error_handler

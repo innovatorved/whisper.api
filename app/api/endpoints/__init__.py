@@ -1,4 +1,4 @@
-# File: my-fastapi-project/app/api/endpoints/__init__.py
+# File: whisper.api/app/api/endpoints/__init__.py
 
 from fastapi import APIRouter
 
