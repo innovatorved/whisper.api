@@ -13,6 +13,7 @@ def get_password_hash(password: str) -> str:
     """
     return pwd_context.hash(password)
 
+
 def verify_password(password: str, hash: str) -> bool:
     """
     Verifies a password against a bcrypt hash

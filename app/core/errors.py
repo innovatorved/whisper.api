@@ -1,6 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import HTTPException , RequestValidationError
+from fastapi.exceptions import HTTPException, RequestValidationError
+
 
 async def http_exception_handler(request: Request, exc: HTTPException):
     """
@@ -11,13 +12,20 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content={"message": exc.detail},
     )
 
-async def http_error_handler(request: Request, exc: HTTPException):
+
+async def http_error_handler(request: Request, exc: Exception):
     """
     Exception handler for HTTP errors
     """
+    if isinstance(exc, HTTPException):
+        detail = exc.detail
+        status_code = exc.status_code
+    else:
+        detail = "Internal server error"
+        status_code = 500
     return JSONResponse(
-        status_code=exc.status_code,
-        content={"message": exc.detail},
+        status_code=status_code,
+        content={"message": detail},
     )
 
 

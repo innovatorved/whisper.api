@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.core.database import Base
-from app.models.user import User
-from app.models.item import Item
+from app.api.models.user import User
+from app.api.models.item import Item
 
 
 def test_create_user(db: Session):

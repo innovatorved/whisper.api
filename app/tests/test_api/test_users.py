@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
-from app.core.config import settings
+from app.main import app
 
-client = TestClient(settings.app)
+client = TestClient(app)
 
 
 def test_create_user():
@@ -22,7 +22,10 @@ def test_create_user_invalid_password():
     data = {"email": "test@example.com", "password": "short"}
     response = client.post("/users/", json=data)
     assert response.status_code == 422
-    assert "ensure this value has at least 6 characters" in response.json()["detail"][0]["msg"]
+    assert (
+        "ensure this value has at least 6 characters"
+        in response.json()["detail"][0]["msg"]
+    )
 
 
 def test_read_user():

@@ -75,3 +75,9 @@ The project structure is organized as follows:
 ```bash
 uvicorn app.main:app --reload
 ```
+
+## Run Test
+
+```bash
+python -m unittest
+```

@@ -8,3 +8,4 @@ pytest-cov
 faker
 requests-mock
 passlib
+httpx

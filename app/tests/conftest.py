@@ -12,6 +12,7 @@ from app.db.session import SessionLocal
 def test_app():
     # set up test app with client
     from app.main import app
+
     client = TestClient(app)
     # set up test database
     SQLALCHEMY_DATABASE_URL = settings.SQLALCHEMY_DATABASE_TEST_URL
