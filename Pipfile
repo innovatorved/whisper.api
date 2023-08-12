@@ -1,0 +1,20 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+python-dotenv = "*"
+sqlalchemy = "*"
+psycopg2-binary = "*"
+pytest = "*"
+pytest-cov = "*"
+faker = "*"
+requests-mock = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9"
