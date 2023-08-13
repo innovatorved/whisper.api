@@ -11,16 +11,19 @@ database = SessionLocal()
 users_router = router = APIRouter()
 
 
-@router.post("/", status_code=201)
+@router.post("/", status_code=201, response_model=UserResponse)
 async def create_user(user: User):
-    USER = UserController(database)
-    USER.create(
-        username=user.username,
-        email=user.email,
-        password=user.password,
-    )
+    try:
+        USER = UserController(database)
+        USER.create(
+            username=user.username,
+            email=user.email,
+            password=user.password,
+        )
 
-    return USER.details()
+        return UserResponse.from_orm(USER.details())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=e.__str__())
 
 
 @router.get("/{user_id}/", response_model=UserResponse)

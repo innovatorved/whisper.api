@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import Column, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
+from sqlalchemy import or_
 from app.core.database import Base
 
 from app.core.security import get_password_hash, verify_password
@@ -45,18 +45,38 @@ class UserController:
         self.db = database
 
     def create(self, username: str, email: str, password: str):
+        isUserExists: Boolean = self.CheckUserIsExistsByEmailAndUsername(
+            email, username
+        )
+        if isUserExists:
+            raise Exception("Email or Username Already Registered")
+
         self.username = username
         self.email = email
         self.hashed_password = get_password_hash(password)
-        db_user = UserInDB(
+
+        self.db_user = UserInDB(
             username=self.username,
             email=self.email,
             hashed_password=self.hashed_password,
         )
-        self.db.add(db_user)
+        self.db.add(self.db_user)
         self.db.commit()
-        self.db.refresh(db_user)
-        self.user = db_user.data()
+        self.db.refresh(self.db_user)
+        self.user = self.db_user.data()
+
+    def CheckUserIsExistsByEmailAndUsername(self, email: str, username: str):
+        db_user = (
+            self.db.query(UserInDB)
+            .filter(or_(UserInDB.email == email, UserInDB.username == username))
+            .first()
+        )
+        if db_user:
+            return True
+        return False
 
     def details(self):
+        return self.db_user
+
+    def detailsInJSON(self):
         return self.user

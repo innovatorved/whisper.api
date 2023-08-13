@@ -1,9 +1,10 @@
 import uuid
+from datetime import datetime
 
-from pydantic import BaseModel
+
+from pydantic import BaseModel, Field
 from typing import Optional
 
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import Column, Integer, String, Boolean
 
 from app.core.database import Base
@@ -16,14 +17,19 @@ class UserBase(BaseModel):
 
 
 class UserResponse(UserBase):
+    id: uuid.UUID = Field(..., alias="id")
     is_active: Optional[bool]
+    created_at: datetime = Field(..., alias="created_at")
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda dt: dt.isoformat(),
+            uuid.UUID: lambda u: str(u),
+        }
 
 
 class User(UserBase):
-    is_active: Optional[bool]
     password: str
 
     class Config:
