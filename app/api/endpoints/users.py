@@ -7,7 +7,6 @@ from app.core.security import get_password_hash, verify_password
 from app.core.models import UserInDB
 
 database = SessionLocal()
-
 users_router = router = APIRouter()
 
 

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = env.get("POSTGRES_PASSWORD")
     POSTGRES_DB: str = env.get("POSTGRES_DB")
     POSTGRES_DATABASE_URL: str = env.get("POSTGRES_DATABASE_URL")
-    TEST_DATABASE_URL: str = env.get("TEST_DATABASE_URL")
+    TEST_DATABASE_URL: str = env.get("POSTGRES_DATABASE_URL")
 
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = ["http://localhost:3000"]
 
