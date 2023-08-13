@@ -9,3 +9,4 @@ faker
 requests-mock
 passlib
 httpx
+PyJWT

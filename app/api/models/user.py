@@ -1,8 +1,13 @@
+import uuid
+
 from pydantic import BaseModel
 from typing import Optional
 
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import Column, Integer, String, Boolean
+
 from app.core.database import Base
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
 class UserBase(BaseModel):
@@ -27,18 +32,3 @@ class User(UserBase):
 
 class UpdateUser(UserBase):
     current_password: str
-
-
-class UserInDB(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    username = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    is_active = Column(Boolean, default=True)
-
-    def __init__(self, username: str, email: str, hashed_password: str):
-        self.username = username
-        self.email = email
-        self.hashed_password = hashed_password
