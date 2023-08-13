@@ -10,3 +10,4 @@ requests-mock
 passlib
 httpx
 PyJWT
+python-multipart

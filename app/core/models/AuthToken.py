@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime
 from sqlalchemy.sql import func
 
-from app.core.database import Base, engine
+from app.core.database import Base
 
 
 class AuthToken(Base):
@@ -29,10 +29,14 @@ class AuthToken(Base):
         return token
 
     def generate_bearer_token(self):
-        token_prefix = str(self.id).replace("-", "")  # Remove hyphens from UUID
-        token_suffix = str(uuid.uuid4().hex)  # Generate a random UUID string
+        token_prefix = str(uuid.uuid4()).replace("-", "")
+        token_suffix = "".join(
+            random.choices(
+                string.ascii_uppercase + string.ascii_lowercase + string.digits, k=32
+            )
+        )
         return f"{token_prefix}{token_suffix}"
 
     @staticmethod
-    def validate_bearer_token(request_token):
+    def validate_bearer_token(request_token: str):
         ...

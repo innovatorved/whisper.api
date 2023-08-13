@@ -1,8 +1,7 @@
 from fastapi import FastAPI
 from app.api import api_router
 from app.core.config import settings
-from app.core.errors import http_error_handler
-from app.core.errors import http422_error_handler
+from app.core.errors import error_handler
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.utils import print_routes
@@ -25,8 +24,8 @@ if settings.BACKEND_CORS_ORIGINS:
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # # Error handlers
-app.add_exception_handler(422, http422_error_handler)
-app.add_exception_handler(500, http_error_handler)
+app.add_exception_handler(422, error_handler)
+app.add_exception_handler(500, error_handler)
 
 # Print all routes
 print_routes(app)

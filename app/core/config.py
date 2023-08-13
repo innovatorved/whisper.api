@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     POSTGRES_DATABASE_URL: str = env.get("POSTGRES_DATABASE_URL")
     TEST_DATABASE_URL: str = env.get("POSTGRES_DATABASE_URL")
 
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = ["http://localhost:3000"]
+    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:8000",
+    ]
 
     @validator("SECRET_KEY", pre=True)
     def secret_key_must_be_set(cls, v: Optional[str], values: Dict[str, Any]) -> str:

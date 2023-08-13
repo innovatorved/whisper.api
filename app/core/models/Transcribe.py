@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 
-
 import uuid
 from app.core.config import settings
 
@@ -19,3 +18,4 @@ class TranscibeInDB(Base):
     text = Column(String)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     user = relationship("UserInDB", back_populates="transcribes")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

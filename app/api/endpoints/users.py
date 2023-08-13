@@ -10,7 +10,7 @@ database = SessionLocal()
 users_router = router = APIRouter()
 
 
-@router.post("/", response_model=UserResponse, status_code=201)
+@router.post("/", status_code=201)
 async def create_user(user: User):
     db_user = UserInDB(
         username=user.username,
@@ -20,7 +20,8 @@ async def create_user(user: User):
     database.add(db_user)
     database.commit()
     database.refresh(db_user)
-    return {**user.dict(), "id": db_user.id, "hashed_password": None}
+    print(db_user)
+    return {**db_user.data()}
 
 
 @router.get("/{user_id}/", response_model=UserResponse)
@@ -50,7 +51,7 @@ async def update_user(user_id: UUID, user: UpdateUser):
     return {**user.dict(), "id": db_user.id, "hashed_password": None}
 
 
-@router.delete("/{user_id}/", response_model=int)
+@router.delete("/{user_id}/")
 async def delete_user(user_id: UUID):
     db_user = database.query(UserInDB).filter(UserInDB.id == user_id).first()
     database.delete(db_user)

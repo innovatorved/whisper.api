@@ -81,3 +81,12 @@ uvicorn app.main:app --reload
 ```bash
 python -m unittest
 ```
+
+# Upload File
+```bash
+curl -X 'POST' \
+  'http://localhost:8000/api/v1/transcribe/' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'audio_file=@ElevenLabs_2023-08-10T13 53 05.000Z_VedVoice_bFrkzQsyKvReo52Q6712.mp3;type=audio/mpeg'
+```
