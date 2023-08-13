@@ -10,6 +10,8 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 
+from app.core.security import get_password_hash, verify_password
+
 
 class UserInDB(Base):
     __tablename__ = "users"
@@ -34,3 +36,27 @@ class UserInDB(Base):
             "email": self.email,
             "created_at": self.created_at,
         }
+
+
+class UserController:
+    UserInDB = UserInDB
+
+    def __init__(self, database):
+        self.db = database
+
+    def create(self, username: str, email: str, password: str):
+        self.username = username
+        self.email = email
+        self.hashed_password = get_password_hash(password)
+        db_user = UserInDB(
+            username=self.username,
+            email=self.email,
+            hashed_password=self.hashed_password,
+        )
+        self.db.add(db_user)
+        self.db.commit()
+        self.db.refresh(db_user)
+        self.user = db_user.data()
+
+    def details(self):
+        return self.user

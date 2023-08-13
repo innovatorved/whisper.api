@@ -5,6 +5,7 @@ from app.api.models.user import User, UpdateUser, UserResponse
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash, verify_password
 from app.core.models import UserInDB
+from app.core.models.User import UserController
 
 database = SessionLocal()
 users_router = router = APIRouter()
@@ -12,16 +13,14 @@ users_router = router = APIRouter()
 
 @router.post("/", status_code=201)
 async def create_user(user: User):
-    db_user = UserInDB(
+    USER = UserController(database)
+    USER.create(
         username=user.username,
         email=user.email,
-        hashed_password=get_password_hash(user.password),
+        password=user.password,
     )
-    database.add(db_user)
-    database.commit()
-    database.refresh(db_user)
-    print(db_user)
-    return {**db_user.data()}
+
+    return USER.details()
 
 
 @router.get("/{user_id}/", response_model=UserResponse)

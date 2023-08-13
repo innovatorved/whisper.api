@@ -24,7 +24,7 @@ if settings.BACKEND_CORS_ORIGINS:
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # # Error handlers
-app.add_exception_handler(422, error_handler)
+# app.add_exception_handler(422, error_handler)
 app.add_exception_handler(500, error_handler)
 
 # Print all routes
