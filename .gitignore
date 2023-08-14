@@ -10,3 +10,9 @@ build/
 *.log  
 *.swp  
 .DS_Store
+/*/*.bin
+*/*.bin
+
+*/*.wav
+*/*.mp3
+*/*.txt

@@ -84,6 +84,15 @@ The project structure is organized as follows:
 | /api/v1/users/{user_id}/ | delete_user          | DELETE      |
 | /api/v1/transcribe/      | post_audio           | POST        |
 
+## Install Dependecy
+```bash
+# Install ffmpeg for Audio Processing
+sudo apt install ffmpeg
+
+# Install Python Package
+pip install -r requirements.txt
+
+```
 
 ## Run this Project
 

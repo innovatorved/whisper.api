@@ -1,22 +1,30 @@
-from fastapi import APIRouter, File, UploadFile, Request, Header
+from typing import Annotated, List, Union
+
+from fastapi import APIRouter, File, UploadFile, Request, Header, HTTPException
 from pydantic import BaseModel
+
+from app.utils.utils import save_audio_file, transcribeFile
 
 router = APIRouter()
 
 
-class AudioFile(BaseModel):
+class Transcription(BaseModel):
+    text: str
     filename: str
-    content_type: str
 
 
-@router.post("/")
+@router.post("/", response_model=Transcription)
 async def post_audio(
-    request: Request, file: UploadFile = File(...), Authorization: str = Header(...)
+    request: Request,
+    file: UploadFile = File(...),
+    Authentication: Annotated[Union[str, None], Header()] = None,
 ):
-    """Receive audio file and save it to disk."""
-    print(f"Authorization header: {Authorization}")
+    print(f"Authorization header: {Authentication}")
 
-    with open(file.filename, "wb") as f:
-        f.write(file.file.read())
-
-    return AudioFile(filename=file.filename, content_type=file.content_type)
+    try:
+        """Receive audio file and save it to disk. and then transcribe the audio file"""
+        file_path = save_audio_file(file)
+        data = transcribeFile(file_path)
+        return Transcription(filename=file.filename, text=data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=e.__str__())
