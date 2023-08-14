@@ -69,6 +69,21 @@ The project structure is organized as follows:
 - `README.md`: this file.
 - `.vscode`: contains Visual Studio Code configuration files.
 
+## Active Paths
+| Path                     | Name                 | Methods     |
+| ------------------------|----------------------|-------------|
+| /api/v1/openapi.json     | openapi              | GET, HEAD   |
+| /docs                    | swagger_ui_html      | GET, HEAD   |
+| /docs/oauth2-redirect    | swagger_ui_redirect  | GET, HEAD   |
+| /redoc                   | redoc_html           | GET, HEAD   |
+| /api/v1/items/           | read_items           | GET         |
+| /api/v1/items/{item_id}  | read_item            | GET         |
+| /api/v1/users/           | create_user          | POST        |
+| /api/v1/users/{user_id}/ | read_user            | GET         |
+| /api/v1/users/{user_id}/ | update_user          | PUT         |
+| /api/v1/users/{user_id}/ | delete_user          | DELETE      |
+| /api/v1/transcribe/      | post_audio           | POST        |
+
 
 ## Run this Project
 

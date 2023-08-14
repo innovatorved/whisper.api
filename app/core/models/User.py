@@ -75,6 +75,24 @@ class UserController:
             return True
         return False
 
+    def read(self, user_id: uuid.UUID):
+        self.db_user = self.db.query(UserInDB).filter(UserInDB.id == user_id).first()
+        if not self.db_user:
+            raise Exception("User not found")
+        self.user = self.db_user.data()
+
+    def update_password(
+        self, user_id: uuid.UUID, current_password: str, new_password: str
+    ):
+        self.read(user_id)
+        if verify_password(current_password, self.db_user.hashed_password):
+            self.db_user.hashed_password = get_password_hash(new_password)
+            self.db.commit()
+            self.db.refresh(self.db_user)
+            self.user = self.db_user.data()
+        else:
+            raise Exception("Current password is incorrect")
+
     def details(self):
         return self.db_user
 

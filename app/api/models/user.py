@@ -29,6 +29,11 @@ class UserResponse(UserBase):
         }
 
 
+class PasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class User(UserBase):
     password: str
 
