@@ -2,6 +2,7 @@ import json
 import subprocess
 import uuid
 import logging
+import wave
 
 
 def get_all_routes(app):
@@ -33,18 +34,20 @@ def print_routes(app):
     print("\n")
 
 
-def transcribeFile(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin"):
-    """./binary/whisper -m models/ggml-tiny.en.bin -f Rev.mp3 -nt --output-text out1.txt"""
+def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin"):
+    """./binary/whisper -m models/ggml-tiny.en.bin -f Rev.mp3 out.wav -nt --output-text out1.txt"""
     try:
         if path is None:
             raise Exception("No path provided")
-        outputFilePath: str = f"transcribe/{uuid.uuid4()}.txt"
-        command: str = f"./binary/whisper -m models/{model} -f {path} -nt --output-text {outputFilePath}"
+        rand = uuid.uuid4()
+        outputFilePath: str = f"transcribe/{rand}.txt"
+        output_audio_path: str = f"audio/{rand}.wav"
+        command: str = f"./binary/whisper -m models/{model} -f {path} {output_audio_path} -nt --output-text {outputFilePath}"
         execute_command(command)
         f = open(outputFilePath, "r")
         data = f.read()
         f.close()
-        return data
+        return [data, output_audio_path]
     except Exception as e:
         logging.error(e)
         raise Exception(e.__str__())
@@ -66,3 +69,22 @@ def save_audio_file(file=None):
     with open(path, "wb") as f:
         f.write(file.file.read())
     return path
+
+
+def get_audio_duration(audio_file):
+    """Gets the duration of the audio file in seconds.
+
+    Args:
+      audio_file: The path to the audio file.
+
+    Returns:
+      The duration of the audio file in seconds.
+    """
+
+    with wave.open(audio_file, "rb") as f:
+        frames = f.getnframes()
+        sample_rate = f.getframerate()
+        duration = frames / sample_rate
+        rounded_duration = int(round(duration, 0))
+
+    return rounded_duration

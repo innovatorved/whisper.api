@@ -1,6 +1,5 @@
 import uuid
 
-
 from app.core.config import settings
 
 from sqlalchemy.dialects.postgresql import UUID
@@ -12,6 +11,8 @@ from app.core.database import Base
 
 from app.core.security import get_password_hash, verify_password
 
+from app.core.models import AuthTokenController
+
 
 class UserInDB(Base):
     __tablename__ = "users"
@@ -22,6 +23,7 @@ class UserInDB(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     transcribes = relationship("TranscibeInDB", back_populates="user")
+    auth_tokens = relationship("AuthToken", back_populates="user")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def __init__(self, username: str, email: str, hashed_password: str):
@@ -44,7 +46,7 @@ class UserController:
     def __init__(self, database):
         self.db = database
 
-    def create(self, username: str, email: str, password: str):
+    def create(self, username: str, email: str, password: str, init_token: bool = True):
         isUserExists: Boolean = self.CheckUserIsExistsByEmailAndUsername(
             email, username
         )
@@ -64,6 +66,10 @@ class UserController:
         self.db.commit()
         self.db.refresh(self.db_user)
         self.user = self.db_user.data()
+
+        if init_token == False:
+            return
+        AuthTokenController(self.db).create(self.db_user.id)
 
     def CheckUserIsExistsByEmailAndUsername(self, email: str, username: str):
         db_user = (
