@@ -1,8 +1,8 @@
-import json
 import subprocess
 import uuid
 import logging
 import wave
+import gdown
 
 from .constant import model_names
 
@@ -100,3 +100,12 @@ def get_model_name(model: str = None):
         return model_names[model]
 
     return model_names["tiny.en.q5"]
+
+
+def download_from_drive(url , output):
+    try:
+        gdown.download(url, output, quiet=False)
+        return True
+    except:
+        print("Error Occured in Downloading model from Gdrive")
+        return False

@@ -11,3 +11,4 @@ passlib
 httpx
 PyJWT
 python-multipart
+gdown
