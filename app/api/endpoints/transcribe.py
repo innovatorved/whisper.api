@@ -6,9 +6,13 @@ from pydantic import BaseModel
 
 from app.core.database import SessionLocal
 
-from app.utils.utils import save_audio_file, transcribe_file, get_audio_duration
+from app.utils.utils import (
+    save_audio_file,
+    transcribe_file,
+    get_audio_duration,
+    get_model_name,
+)
 from app.core.models import AuthTokenController, TranscribeController
-
 
 router = APIRouter()
 database = SessionLocal()
@@ -24,12 +28,13 @@ async def post_audio(
     background_tasks: BackgroundTasks,
     request: Request,
     file: UploadFile = File(...),
+    model: str = "tiny.en.q5",
     Authentication: Annotated[Union[str, None], Header()] = None,
 ):
     try:
         userId = AuthTokenController(database).get_userid_from_token(Authentication)
         file_path = save_audio_file(file)
-        [data, output_audio_path] = transcribe_file(file_path)
+        [data, output_audio_path] = transcribe_file(file_path, get_model_name(model))
         background_tasks.add_task(
             create_transcribe_record, database, userId, data, output_audio_path
         )

@@ -4,6 +4,8 @@ import uuid
 import logging
 import wave
 
+from .constant import model_names
+
 
 def get_all_routes(app):
     routes = []
@@ -88,3 +90,13 @@ def get_audio_duration(audio_file):
         rounded_duration = int(round(duration, 0))
 
     return rounded_duration
+
+
+def get_model_name(model: str = None):
+    if model is None:
+        model_names["tiny.en.q5"]
+
+    if model in model_names.keys():
+        return model_names[model]
+
+    return model_names["tiny.en.q5"]
