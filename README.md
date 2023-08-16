@@ -48,41 +48,6 @@ whisper.api
 
 ## Description
 
-The project structure is organized as follows:
-
-- `app`: contains the main application code.
-- `app/api`: contains the API endpoints.
-- `app/api/endpoints`: contains the endpoint functions.
-- `app/api/models`: contains the data models.
-- `app/core`: contains the core application code.
-- `app/core/config.py`: contains the application configuration.
-- `app/core/security.py`: contains the security functions.
-- `app/core/database.py`: contains the database connection code.
-- `app/tests`: contains the test code.
-- `app/tests/test_api`: contains the API endpoint tests.
-- `app/tests/test_core`: contains the core application tests.
-- `app/main.py`: contains the main application entry point.
-- `.env`: contains environment variables.
-- `.gitignore`: specifies files and directories to ignore in Git.
-- `Dockerfile`: specifies the Docker image configuration.
-- `requirements.txt`: specifies the Python dependencies.
-- `README.md`: this file.
-- `.vscode`: contains Visual Studio Code configuration files.
-
-## Active Paths
-| Path                     | Name                 | Methods     |
-| ------------------------|----------------------|-------------|
-| /api/v1/openapi.json     | openapi              | GET, HEAD   |
-| /docs                    | swagger_ui_html      | GET, HEAD   |
-| /docs/oauth2-redirect    | swagger_ui_redirect  | GET, HEAD   |
-| /redoc                   | redoc_html           | GET, HEAD   |
-| /api/v1/items/           | read_items           | GET         |
-| /api/v1/items/{item_id}  | read_item            | GET         |
-| /api/v1/users/           | create_user          | POST        |
-| /api/v1/users/{user_id}/ | read_user            | GET         |
-| /api/v1/users/{user_id}/ | update_user          | PUT         |
-| /api/v1/users/{user_id}/ | delete_user          | DELETE      |
-| /api/v1/transcribe/      | post_audio           | POST        |
 
 ## Install Dependecy
 ```bash
@@ -98,12 +63,6 @@ pip install -r requirements.txt
 
 ```bash
 uvicorn app.main:app --reload
-```
-
-## Run Test
-
-```bash
-python -m unittest
 ```
 
 # Upload File
