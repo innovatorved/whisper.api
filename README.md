@@ -21,7 +21,7 @@ To run the project, use the following command:
 uvicorn app.main:app --reload
 ```
 
-# Example to Uploading a File
+# Example to Transcribe a File
 To upload a file and transcribe it, use the following command:
 Note: The token is a dummy token and will not work. Please use the token provided by the admin.
 
