@@ -5,6 +5,11 @@ from app.core.errors import error_handler
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.utils import print_routes
+from app.utils.checks import run_checks
+
+if not run_checks():
+    raise Exception("Failed to pass all checks")
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json"

@@ -1,8 +1,12 @@
+import os
+import urllib
 import subprocess
 import uuid
 import logging
 import wave
 import gdown
+from tqdm import tqdm
+
 
 from .constant import model_names
 
@@ -102,10 +106,30 @@ def get_model_name(model: str = None):
     return model_names["tiny.en.q5"]
 
 
-def download_from_drive(url , output):
+def download_from_drive(url, output):
     try:
         gdown.download(url, output, quiet=False)
         return True
     except:
         print("Error Occured in Downloading model from Gdrive")
         return False
+
+
+def download_file(url, filepath):
+    try:
+        filename = os.path.basename(url)
+
+        with tqdm(
+            unit="B", unit_scale=True, unit_divisor=1024, miniters=1, desc=filename
+        ) as progress_bar:
+            urllib.request.urlretrieve(
+                url,
+                filepath,
+                reporthook=lambda block_num, block_size, total_size: progress_bar.update(
+                    block_size
+                ),
+            )
+
+        print("File downloaded successfully!")
+    except Exception as e:
+        print(f"An error occurred: {e}")
