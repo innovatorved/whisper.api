@@ -1,75 +1,62 @@
 # whisper.api
 
-This is a production level project structure for a Python FastAPI project.
+This project provides an API with user level access support to transcribe speech to text using a finetuned and processed Whisper ASR model.
 
-## Project Structure
+## Installation
 
-```
-whisper.api
-├── app
-│   ├── __init__.py
-│   ├── api
-│   │   ├── __init__.py
-│   │   ├── endpoints
-│   │   │   ├── __init__.py
-│   │   │   ├── items.py
-│   │   │   └── users.py
-│   │   └── models
-│   │       ├── __init__.py
-│   │       ├── item.py
-│   │       └── user.py
-│   ├── core
-│   │   ├── __init__.py
-│   │   ├── config.py
-│   │   ├── security.py
-│   │   └── database.py
-│   ├── tests
-│   │   ├── __init__.py
-│   │   ├── conftest.py
-│   │   ├── test_api
-│   │   │   ├── __init__.py
-│   │   │   ├── test_items.py
-│   │   │   └── test_users.py
-│   │   └── test_core
-│   │       ├── __init__.py
-│   │       ├── test_config.py
-│   │       ├── test_security.py
-│   │       └── test_database.py
-│   └── main.py
-├── .env
-├── .gitignore
-├── Dockerfile
-├── requirements.txt
-├── README.md
-└── .vscode
-    ├── settings.json
-    └── launch.json
-```
+To install the necessary dependencies, run the following command:
 
-## Description
-
-
-## Install Dependecy
 ```bash
 # Install ffmpeg for Audio Processing
 sudo apt install ffmpeg
 
 # Install Python Package
 pip install -r requirements.txt
-
 ```
 
-## Run this Project
+# Running the Project
+To run the project, use the following command:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-# Upload File
+# Example to Uploading a File
+To upload a file and transcribe it, use the following command:
+Note: The token is a dummy token and will not work. Please use the token provided by the admin.
+
 ```bash
+
+# Modify the token and audioFilePath
 curl -X 'POST' \
-  'http://localhost:8000/api/v1/transcribe/' \
+  'http://localhost:8000/api/v1/transcribe/?model=tiny.en.q5' \
   -H 'accept: application/json' \
+  -H 'Authentication: e9b7658aa93342c492fa64153849c68b8md9uBmaqCwKq4VcgkuBD0G54FmsE8JT' \
   -H 'Content-Type: multipart/form-data' \
-  -F 'audio_file=@ElevenLabs_2023-08-10T13 53 05.000Z_VedVoice_bFrkzQsyKvReo52Q6712.mp3;type=audio/mpeg'
+  -F 'file=@audioFilePath.wav;type=audio/wav'
 ```
+
+## License
+
+[MIT](https://choosealicense.com/licenses/mit/)
+
+
+## Reference & Credits
+
+- [https://github.com/openai/whisper](https://github.com/openai/whisper)
+- [https://openai.com/blog/whisper/](https://openai.com/blog/whisper/)
+- [https://github.com/ggerganov/whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+
+  
+## Authors
+
+- [Ved Gupta](https://www.github.com/innovatorved)
+
+  
+## 🚀 About Me
+I'm a Developer i will feel the code then write.
+
+  
+## Support
+
+For support, email vedgupta@protonmail.com
