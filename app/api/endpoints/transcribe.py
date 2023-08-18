@@ -40,8 +40,8 @@ async def post_audio(
         )
 
         return Transcription(filename=file.filename, text=data)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=e.__str__())
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=exc.__str__())
 
 
 def create_transcribe_record(database, userId, data, file_path):

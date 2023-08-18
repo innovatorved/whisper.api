@@ -10,8 +10,10 @@ from sqlalchemy import or_
 from app.core.database import Base
 
 from app.core.security import get_password_hash, verify_password
+from app.utils.utils import is_valid_email, is_valid_password
 
 from app.core.models import AuthTokenController
+from fastapi import HTTPException, status
 
 
 class UserInDB(Base):
@@ -47,11 +49,24 @@ class UserController:
         self.db = database
 
     def create(self, username: str, email: str, password: str, init_token: bool = True):
+        if not is_valid_email(email):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid Email"
+            )
+        if not is_valid_password(password):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid Password",
+            )
+
         isUserExists: Boolean = self.CheckUserIsExistsByEmailAndUsername(
             email, username
         )
         if isUserExists:
-            raise Exception("Email or Username Already Registered")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email or Username Already Registered",
+            )
 
         self.username = username
         self.email = email
@@ -84,7 +99,9 @@ class UserController:
     def read(self, user_id: uuid.UUID):
         self.db_user = self.db.query(UserInDB).filter(UserInDB.id == user_id).first()
         if not self.db_user:
-            raise Exception("User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
         self.user = self.db_user.data()
 
     def update_password(
@@ -97,7 +114,13 @@ class UserController:
             self.db.refresh(self.db_user)
             self.user = self.db_user.data()
         else:
-            raise Exception("Current password is incorrect")
+            raise HTTPException(status_code=400, detail="Incorrect password")
+
+    def delete(self, user_id: uuid.UUID):
+        self.read(user_id)
+        self.db.delete(self.db_user)
+        self.db.commit()
+        return user_id
 
     def details(self):
         return self.db_user

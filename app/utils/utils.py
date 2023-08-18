@@ -1,4 +1,6 @@
+from fastapi import HTTPException
 import os
+import re
 import urllib
 import subprocess
 import uuid
@@ -44,7 +46,7 @@ def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin
     """./binary/whisper -m models/ggml-tiny.en.bin -f Rev.mp3 out.wav -nt --output-text out1.txt"""
     try:
         if path is None:
-            raise Exception("No path provided")
+            raise HTTPException(status_code=400, detail="No path provided")
         rand = uuid.uuid4()
         outputFilePath: str = f"transcribe/{rand}.txt"
         output_audio_path: str = f"audio/{rand}.wav"
@@ -54,18 +56,18 @@ def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin
         data = f.read()
         f.close()
         return [data, output_audio_path]
-    except Exception as e:
-        logging.error(e)
-        raise Exception(e.__str__())
+    except Exception as exc:
+        logging.error(exc)
+        raise HTTPException(status_code=400, detail=exc.__str__())
 
 
 def execute_command(command: str) -> str:
     try:
         result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
         return result.decode("utf-8").strip()
-    except subprocess.CalledProcessError as e:
-        logging.error(e.output.decode("utf-8").strip())
-        raise Exception("Error while transcribing")
+    except subprocess.CalledProcessError as exc:
+        logging.error(exc.output.decode("utf-8").strip())
+        raise HTTPException(status_code=400, detail="Error while transcribing")
 
 
 def save_audio_file(file=None):
@@ -98,7 +100,7 @@ def get_audio_duration(audio_file):
 
 def get_model_name(model: str = None):
     if model is None:
-        model_names["tiny.en.q5"]
+        model = "tiny.en.q5"
 
     if model in model_names.keys():
         return model_names[model]
@@ -111,8 +113,9 @@ def download_from_drive(url, output):
         gdown.download(url, output, quiet=False)
         return True
     except:
-        print("Error Occured in Downloading model from Gdrive")
-        return False
+        raise HTTPException(
+            status_code=400, detail="Error Occured in Downloading model from Gdrive"
+        )
 
 
 def download_file(url, filepath):
@@ -131,5 +134,32 @@ def download_file(url, filepath):
             )
 
         print("File downloaded successfully!")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"An error occurred: {exc}")
+
+
+def is_valid_email(email: str) -> bool:
+    email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    return bool(re.match(email_regex, email))
+
+
+def is_valid_password(password: str) -> bool:
+    if len(password) < 6:
+        return False
+    return True
+
+
+def is_field_valid(**kwargs) -> bool:
+    for key, value in kwargs.items():
+        if key == "email":
+            if not is_valid_email(value):
+                return False
+        elif key == "password":
+            if not is_valid_password(value):
+                return False
+        elif key == "username":
+            if len(value) < 3:
+                return False
+        else:
+            return False
+    return True

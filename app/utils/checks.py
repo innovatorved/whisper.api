@@ -8,8 +8,8 @@ def run_checks():
         if not check_models_exist():
             return False
         return True
-    except Exception as e:
-        print("Error in run_checks: {}".format(str(e)))
+    except Exception as exc:
+        print("Error in run_checks: {}".format(str(exc)))
         return False
 
 
@@ -22,8 +22,8 @@ def check_models_exist():
                 print("Model {} does not exist".format(key))
                 download_model(key)
         return True
-    except Exception as e:
-        print("Error in check_models_exist: {}".format(str(e)))
+    except Exception as exc:
+        print("Error in check_models_exist: {}".format(str(exc)))
         return False
 
 
@@ -35,5 +35,5 @@ def download_model(model_key: str):
             os.path.join(os.getcwd(), "models", model_names[model_key]),
         )
         print("Downloaded model {} from {}".format(model_key, model_urls[model_key]))
-    except Exception as e:
-        print("Error in download_models: {}".format(str(e)))
+    except Exception as exc:
+        print("Error in download_models: {}".format(str(exc)))

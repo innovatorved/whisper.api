@@ -1,8 +1,9 @@
 import uuid
+import re
 from datetime import datetime
 
 
-from pydantic import BaseModel, Field
+from pydantic import ConfigDict, BaseModel, Field, field_validator
 from typing import Optional
 
 from sqlalchemy import Column, Integer, String, Boolean
@@ -18,15 +19,11 @@ class UserBase(BaseModel):
 
 class UserResponse(UserBase):
     id: uuid.UUID = Field(..., alias="id")
-    is_active: Optional[bool]
+    is_active: Optional[bool] = None
     created_at: datetime = Field(..., alias="created_at")
-
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda dt: dt.isoformat(),
-            uuid.UUID: lambda u: str(u),
-        }
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
 
 
 class PasswordUpdate(BaseModel):
@@ -37,9 +34,25 @@ class PasswordUpdate(BaseModel):
 class User(UserBase):
     password: str
 
-    class Config:
-        from_attributes = True
+    @field_validator("email")
+    def email_must_be_valid(cls, v):
+        if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", v):
+            raise ValueError("Invalid email address")
+        return v
+
+    @field_validator("password")
+    def password_must_be_long(cls, v):
+        if len(v) < 6:
+            raise ValueError("Password must be at least 6 characters long")
+        return v
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UpdateUser(UserBase):
     current_password: str
+
+
+class UserDeletedResponse(BaseModel):
+    detail: str = Field(..., alias="detail")
+    model_config = ConfigDict(from_attributes=True)

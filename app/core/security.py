@@ -1,4 +1,5 @@
 from passlib.context import CryptContext
+from fastapi import HTTPException
 
 from app.core.config import settings
 
@@ -20,4 +21,7 @@ def verify_password(password: str, hash: str) -> bool:
     """
     Verifies a password against a bcrypt hash
     """
-    return pwd_context.verify(password, hash)
+    is_valid = pwd_context.verify(password, hash)
+    if not is_valid:
+        return False
+    return True
