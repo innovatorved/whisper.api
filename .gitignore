@@ -16,3 +16,5 @@ build/
 */*.wav
 */*.mp3
 */*.txt
+
+log.txt
