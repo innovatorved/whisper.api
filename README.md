@@ -1,3 +1,12 @@
+---
+title: whisper.api
+emoji: 🐳
+colorFrom: purple
+colorTo: gray
+sdk: docker
+app_port: 7860
+---
+
 # whisper.api
 
 This project provides an API with user level access support to transcribe speech to text using a finetuned and processed Whisper ASR model.

@@ -59,10 +59,10 @@ class UserController:
                 detail="Invalid Password",
             )
 
-        isUserExists: Boolean = self.CheckUserIsExistsByEmailAndUsername(
+        is_user_exists: Boolean = self.CheckUserIsExistsByEmailAndUsername(
             email, username
         )
-        if isUserExists:
+        if is_user_exists:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Email or Username Already Registered",
