@@ -1,4 +1,3 @@
-
 ---
 title: whisper.api
 emoji: 🐳
