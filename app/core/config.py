@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Whisper API"
     PROJECT_VERSION: str = "0.1.0"
     SECRET_KEY: str = env.get("SECRET_KEY")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = env.get("ACCESS_TOKEN_EXPIRE_MINUTES") or 60 * 24 * 7
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = (
+        env.get("ACCESS_TOKEN_EXPIRE_MINUTES") or 60 * 24 * 7
+    )
 
     SERVER_NAME: str = env.get("SERVER_NAME")
     SERVER_HOST: AnyHttpUrl = env.get("SERVER_HOST")
