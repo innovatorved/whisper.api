@@ -12,3 +12,4 @@ httpx
 PyJWT
 python-multipart
 gdown
+pydantic-settings

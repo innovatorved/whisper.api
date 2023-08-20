@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Whisper API"
     PROJECT_VERSION: str = "0.1.0"
     SECRET_KEY: str = env.get("SECRET_KEY")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = env.get("ACCESS_TOKEN_EXPIRE_MINUTES")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = (
+        env.get("ACCESS_TOKEN_EXPIRE_MINUTES") or 60 * 24 * 7
+    )
 
     SERVER_NAME: str = env.get("SERVER_NAME")
     SERVER_HOST: AnyHttpUrl = env.get("SERVER_HOST")
@@ -48,34 +50,6 @@ class Settings(BaseSettings):
     ) -> AnyHttpUrl:
         if not v:
             raise ValueError("SERVER_HOST must be set")
-        return v
-
-    @field_validator("POSTGRES_SERVER")
-    def postgres_server_must_be_set(
-        cls, v: Optional[str], values: Dict[str, Any]
-    ) -> str:
-        if not v:
-            raise ValueError("POSTGRES_SERVER must be set")
-        return v
-
-    @field_validator("POSTGRES_USER")
-    def postgres_user_must_be_set(cls, v: Optional[str], values: Dict[str, Any]) -> str:
-        if not v:
-            raise ValueError("POSTGRES_USER must be set")
-        return v
-
-    @field_validator("POSTGRES_PASSWORD")
-    def postgres_password_must_be_set(
-        cls, v: Optional[str], values: Dict[str, Any]
-    ) -> str:
-        if not v:
-            raise ValueError("POSTGRES_PASSWORD must be set")
-        return v
-
-    @field_validator("POSTGRES_DB")
-    def postgres_db_must_be_set(cls, v: Optional[str], values: Dict[str, Any]) -> str:
-        if not v:
-            raise ValueError("POSTGRES_DB must be set")
         return v
 
     @field_validator("POSTGRES_DATABASE_URL")
