@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import api_router
 from app.core.config import settings
 from app.core.errors import error_handler
+from app.api.models.ping import PingResponse
 
 from app.utils import print_routes
 from app.utils.checks import run_checks
@@ -27,7 +28,7 @@ if settings.BACKEND_CORS_ORIGINS:
     )
 
 
-@app.get("/ping")
+@app.get("/ping", tags=["ping"], response_model=PingResponse)
 async def ping():
     return {"ping": "pong"}
 
@@ -36,7 +37,6 @@ async def ping():
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # # Error handlers
-# app.add_exception_handler(422, error_handler)
 app.add_exception_handler(500, error_handler)
 
 # Print all routes

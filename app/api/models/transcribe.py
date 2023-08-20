@@ -11,5 +11,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 
-class Transcribe(BaseModel):
-    ...
+class Transcription(BaseModel):
+    text: str
+    filename: str

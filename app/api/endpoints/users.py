@@ -3,7 +3,14 @@ from uuid import UUID
 from fastapi import APIRouter, status, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.models.user import User, UserResponse, PasswordUpdate, UserDeletedResponse
+from app.api.models.user import (
+    User,
+    UserResponse,
+    PasswordUpdate,
+    UserDeletedResponse,
+    User_GET_TOKEN,
+    Response_Token,
+)
 from app.core.database import get_db
 from app.core.models.User import UserController
 
@@ -23,6 +30,24 @@ async def create_user(user: User, db: Session = Depends(get_db)):
         )
 
         return UserResponse.model_validate(USER.details())
+    except HTTPException as exc:
+        logger.error(exc)
+        raise exc
+    except Exception as exc:
+        logger.error(exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+
+@router.post(
+    "/get_token", status_code=status.HTTP_200_OK, response_model=Response_Token
+)
+async def get_user_token(user: User_GET_TOKEN, db: Session = Depends(get_db)):
+    try:
+        USER = UserController(db)
+        token = USER.read_token(user.email, user.password)
+        return {"token": token}
     except HTTPException as exc:
         logger.error(exc)
         raise exc

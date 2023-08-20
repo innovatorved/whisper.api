@@ -31,6 +31,15 @@ class PasswordUpdate(BaseModel):
     new_password: str
 
 
+class User_GET_TOKEN(BaseModel):
+    email: str
+    password: str
+
+
+class Response_Token(BaseModel):
+    token: str
+
+
 class User(UserBase):
     password: str
 

@@ -2,7 +2,6 @@ from typing import Annotated, List, Union
 
 from fastapi import APIRouter, File, UploadFile, Request, Header, HTTPException
 from fastapi.background import BackgroundTasks
-from pydantic import BaseModel
 
 from app.core.database import SessionLocal
 
@@ -13,14 +12,10 @@ from app.utils.utils import (
     get_model_name,
 )
 from app.core.models import AuthTokenController, TranscribeController
+from app.api.models import Transcription
 
 router = APIRouter()
 database = SessionLocal()
-
-
-class Transcription(BaseModel):
-    text: str
-    filename: str
 
 
 @router.post("/", response_model=Transcription)

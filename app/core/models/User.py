@@ -86,6 +86,14 @@ class UserController:
             return
         AuthTokenController(self.db).create(self.db_user.id)
 
+    def read_token(self, email: str, password: str):
+        self.read_by_email(email)
+        if not verify_password(password, self.db_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Incorrect password")
+        TOKEN = AuthTokenController(self.db)
+        TOKEN.get_token_from_user_id(self.db_user.id)
+        return TOKEN.get_token()
+
     def CheckUserIsExistsByEmailAndUsername(self, email: str, username: str):
         db_user = (
             self.db.query(UserInDB)
@@ -95,6 +103,14 @@ class UserController:
         if db_user:
             return True
         return False
+
+    def read_by_email(self, email: str):
+        self.db_user = self.db.query(UserInDB).filter(UserInDB.email == email).first()
+        if not self.db_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        self.user = self.db_user.data()
 
     def read(self, user_id: uuid.UUID):
         self.db_user = self.db.query(UserInDB).filter(UserInDB.id == user_id).first()

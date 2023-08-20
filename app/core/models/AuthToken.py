@@ -39,6 +39,12 @@ class AuthTokenController:
             raise Exception("Invalid Token!")
         return user.user_id
 
+    def get_token_from_user_id(self, user_id: UUID) -> str:
+        token = self.db.query(AuthToken).filter(AuthToken.user_id == user_id).first()
+        if not token:
+            raise Exception("Invalid Token!")
+        self.auth_token = token
+
     def create(self, user_id: UUID):
         self.user_id = user_id
         self.token = self.create_token()
