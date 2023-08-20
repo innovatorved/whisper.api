@@ -1,8 +1,9 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.api import api_router
 from app.core.config import settings
 from app.core.errors import error_handler
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.utils import print_routes
 from app.utils.checks import run_checks
@@ -24,6 +25,12 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+@app.get("/ping")
+async def ping():
+    return {"ping": "pong"}
+
 
 # Include routers
 app.include_router(api_router, prefix=settings.API_V1_STR)
