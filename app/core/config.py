@@ -50,34 +50,6 @@ class Settings(BaseSettings):
             raise ValueError("SERVER_HOST must be set")
         return v
 
-    @field_validator("POSTGRES_SERVER")
-    def postgres_server_must_be_set(
-        cls, v: Optional[str], values: Dict[str, Any]
-    ) -> str:
-        if not v:
-            raise ValueError("POSTGRES_SERVER must be set")
-        return v
-
-    @field_validator("POSTGRES_USER")
-    def postgres_user_must_be_set(cls, v: Optional[str], values: Dict[str, Any]) -> str:
-        if not v:
-            raise ValueError("POSTGRES_USER must be set")
-        return v
-
-    @field_validator("POSTGRES_PASSWORD")
-    def postgres_password_must_be_set(
-        cls, v: Optional[str], values: Dict[str, Any]
-    ) -> str:
-        if not v:
-            raise ValueError("POSTGRES_PASSWORD must be set")
-        return v
-
-    @field_validator("POSTGRES_DB")
-    def postgres_db_must_be_set(cls, v: Optional[str], values: Dict[str, Any]) -> str:
-        if not v:
-            raise ValueError("POSTGRES_DB must be set")
-        return v
-
     @field_validator("POSTGRES_DATABASE_URL")
     def postgres_db_url_must_be_set(
         cls, v: Optional[str], values: Dict[str, Any]
