@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+
 
 from app.api import api_router
 from app.core.config import settings
@@ -26,6 +28,10 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+@app.get("/", include_in_schema=False)
+async def redirect_to_docs():
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/ping", tags=["ping"], response_model=PingResponse)
