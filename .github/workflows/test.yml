@@ -23,12 +23,12 @@ jobs:
           pip install pytest
           pip install fastapi
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        
+
+      - name: Test with pytest
         env:
           POSTGRES_DATABASE_URL: ${{ secrets.POSTGRES_DATABASE_URL }}
           SERVER_NAME: ${{ secrets.SERVER_NAME }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
-
-      - name: Test with pytest
+          
         run: pytest
