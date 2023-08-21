@@ -19,10 +19,6 @@ class Settings(BaseSettings):
     SERVER_NAME: str = env.get("SERVER_NAME")
     SERVER_HOST: AnyHttpUrl = env.get("SERVER_HOST")
 
-    POSTGRES_SERVER: str = env.get("POSTGRES_SERVER")
-    POSTGRES_USER: str = env.get("POSTGRES_USER")
-    POSTGRES_PASSWORD: str = env.get("POSTGRES_PASSWORD")
-    POSTGRES_DB: str = env.get("POSTGRES_DB")
     POSTGRES_DATABASE_URL: str = env.get("POSTGRES_DATABASE_URL")
     TEST_DATABASE_URL: str = env.get("POSTGRES_DATABASE_URL")
 
