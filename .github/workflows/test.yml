@@ -1,0 +1,34 @@
+name: Python FastAPI App Tests
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install fastapi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        
+        env:
+          POSTGRES_DATABASE_URL: ${{ secrets.POSTGRES_DATABASE_URL }}
+          SERVER_NAME: ${{ secrets.SERVER_NAME }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+
+      - name: Test with pytest
+        run: pytest
