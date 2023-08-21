@@ -36,6 +36,4 @@ jobs:
           echo $SERVER_NAME
           echo $SERVER_HOST
           echo $SECRET_KEY
-
-          
-        run: pytest
+          pytest
