@@ -8,7 +8,7 @@ app_file: Dockerfile
 app_port: 7860
 ---
 
-# Whisper API - Speech to Text Transcription
+## Whisper API - Speech to Text Transcription
 
 Description: This open source project provides a self-hostable API for speech to text transcription using a finetuned Whisper ASR model. The API allows you to easily convert audio files to text through HTTP requests. Ideal for adding speech recognition capabilities to your applications.
 
@@ -35,7 +35,7 @@ sudo apt install ffmpeg
 pip install -r requirements.txt
 ```
 
-# Running the Project
+## Running the Project
 To run the project, use the following command:
 
 ```bash
