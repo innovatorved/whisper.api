@@ -1,6 +1,6 @@
 ---
 title: whisper.api
-emoji: 🐳
+emoji: 😶‍🌫️
 colorFrom: purple
 colorTo: gray
 sdk: docker
@@ -31,9 +31,28 @@ To run the project, use the following command:
 uvicorn app.main:app --reload
 ```
 
-# Example to Transcribe a File
+## Get Your token
+To get your token, use the following command:
+
+```bash
+curl -X 'POST' \
+  'https://innovatorved-whisper-api.hf.space/api/v1/users/get_token' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "email": "example@domain.com",
+  "password": "password"
+}'
+```
+
+## Example to Transcribe a File
 To upload a file and transcribe it, use the following command:
 Note: The token is a dummy token and will not work. Please use the token provided by the admin.
+
+Here are the available models:
+- tiny.en
+- tiny.en.q5
+- base.en.q5
 
 ```bash
 
