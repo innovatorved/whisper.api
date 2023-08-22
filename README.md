@@ -8,9 +8,20 @@ app_file: Dockerfile
 app_port: 7860
 ---
 
-# whisper.api
+# Whisper API - Speech to Text Transcription
 
-This project provides an API with user level access support to transcribe speech to text using a finetuned and processed Whisper ASR model.
+Description: This open source project provides a self-hostable API for speech to text transcription using a finetuned Whisper ASR model. The API allows you to easily convert audio files to text through HTTP requests. Ideal for adding speech recognition capabilities to your applications.
+
+Key features:
+
+- Uses a finetuned Whisper model for accurate speech recognition
+- Simple HTTP API for audio file transcription
+- User level access with API keys for managing usage
+- Self-hostable code for your own speech transcription service
+- Quantized model optimization for fast and efficient inference
+- Open source implementation for customization and transparency
+
+This repository contains code to deploy the API server along with finetuning and quantizing models. Check out the documentation for getting started!
 
 ## Installation
 
