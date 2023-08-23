@@ -1,8 +1,8 @@
 import uuid
 
 from fastapi.testclient import TestClient
-from app.main import app
 
+from app.main import app
 from app.tests.utils.utils import fake_user_details, get_new_fake_pwd
 
 client = TestClient(app)

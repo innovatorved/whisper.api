@@ -1,5 +1,5 @@
-from passlib.context import CryptContext
 from fastapi import HTTPException
+from passlib.context import CryptContext
 
 from app.core.config import settings
 

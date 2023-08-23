@@ -1,7 +1,7 @@
-from sqlalchemy.orm import Session
-from app.core.database import SessionLocal
-
 from faker import Faker
+from sqlalchemy.orm import Session
+
+from app.core.database import SessionLocal
 
 fake = Faker()
 

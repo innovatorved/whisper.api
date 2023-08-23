@@ -1,4 +1,5 @@
 import os
+
 from app.utils.constant import model_names, model_urls
 from app.utils.utils import download_file
 

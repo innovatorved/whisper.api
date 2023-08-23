@@ -1,15 +1,13 @@
-import uuid
 import random
 import string
+import uuid
 
-from app.core.config import settings
-
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-
 from sqlalchemy.sql import func
 
+from app.core.config import settings
 from app.core.database import Base
 
 

@@ -1,13 +1,12 @@
+import uuid
 from datetime import datetime, timedelta
 
-import uuid
-from app.core.config import settings
-
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
+from app.core.config import settings
 from app.core.database import Base, engine
 
 

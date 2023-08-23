@@ -1,18 +1,13 @@
 from typing import Annotated, List, Union
 
-from fastapi import APIRouter, File, UploadFile, Request, Header, HTTPException
+from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
 from fastapi.background import BackgroundTasks
 
-from app.core.database import SessionLocal
-
-from app.utils.utils import (
-    save_audio_file,
-    transcribe_file,
-    get_audio_duration,
-    get_model_name,
-)
-from app.core.models import AuthTokenController, TranscribeController
 from app.api.models import Transcription
+from app.core.database import SessionLocal
+from app.core.models import AuthTokenController, TranscribeController
+from app.utils.utils import (get_audio_duration, get_model_name,
+                             save_audio_file, transcribe_file)
 
 router = APIRouter()
 database = SessionLocal()

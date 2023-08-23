@@ -1,15 +1,13 @@
-import uuid
 import re
+import uuid
 from datetime import datetime
-
-
-from pydantic import ConfigDict, BaseModel, Field, field_validator
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, Boolean
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
 class UserBase(BaseModel):

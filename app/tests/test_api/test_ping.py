@@ -1,6 +1,7 @@
 # File: whisper.api/app/tests/test_api/__init__.py
 
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 client = TestClient(app)

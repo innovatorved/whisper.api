@@ -1,14 +1,14 @@
-from fastapi import HTTPException
+import logging
 import os
 import re
-import urllib
 import subprocess
+import urllib
 import uuid
-import logging
 import wave
-import gdown
-from tqdm import tqdm
 
+import gdown
+from fastapi import HTTPException
+from tqdm import tqdm
 
 from .constant import model_names
 

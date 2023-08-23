@@ -1,7 +1,8 @@
 # File: whisper.api/app/api/__init__.py
 
 from fastapi import APIRouter
-from .endpoints import users, transcribe
+
+from .endpoints import transcribe, users
 
 api_router = APIRouter()
 

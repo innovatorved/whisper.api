@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.main import app
-from app.tests.utils.utils import override_get_db, get_db
+from app.tests.utils.utils import get_db, override_get_db
 
 # Create test database
 TEST_DATABASE_URL = settings.TEST_DATABASE_URL

@@ -1,19 +1,16 @@
 import uuid
 
-from app.core.config import settings
-
+from fastapi import HTTPException, status
+from sqlalchemy import Boolean, Column, DateTime, String, or_
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import Column, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy import or_
-from app.core.database import Base
 
+from app.core.config import settings
+from app.core.database import Base
+from app.core.models import AuthTokenController
 from app.core.security import get_password_hash, verify_password
 from app.utils.utils import is_valid_email, is_valid_password
-
-from app.core.models import AuthTokenController
-from fastapi import HTTPException, status
 
 
 class UserInDB(Base):

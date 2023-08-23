@@ -4,8 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.core.database import Base
-from app.core.database import SessionLocal
+from app.core.database import Base, SessionLocal
 
 
 @pytest.fixture(scope="module")

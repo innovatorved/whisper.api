@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
+
 from app.core.database import SessionLocal
 from app.core.models.User import UserController
-
 from app.tests.utils.utils import fake_user_details
 
 

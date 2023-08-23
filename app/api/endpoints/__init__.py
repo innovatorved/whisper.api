@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from . import users, transcribe
+from . import transcribe, users
 
 router = APIRouter()
 

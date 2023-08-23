@@ -2,12 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-
 from app.api import api_router
+from app.api.models.ping import PingResponse
 from app.core.config import settings
 from app.core.errors import error_handler
-from app.api.models.ping import PingResponse
-
 from app.utils import print_routes
 from app.utils.checks import run_checks
 

@@ -1,8 +1,7 @@
 from os import environ as env
-
 from typing import Any, Dict, List, Optional, Union
-from pydantic import AnyHttpUrl, field_validator
 
+from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings
 
 
