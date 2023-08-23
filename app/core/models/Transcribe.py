@@ -34,12 +34,16 @@ class TranscribeController:
         self.db = database
 
     def create(self, user_id: UUID, text: str, duration: int):
-        self.user_id = user_id
-        self.text = text
-        self.audio_duration = duration
-        self.transcribe_data = TranscibeInDB(
-            user_id=self.user_id, text=self.text, audio_duration=self.audio_duration
-        )
-        self.db.add(self.transcribe_data)
-        self.db.commit()
-        self.db.refresh(self.transcribe_data)
+        try:
+            self.user_id = user_id
+            self.text = text
+            self.audio_duration = duration
+            self.transcribe_data = TranscibeInDB(
+                user_id=self.user_id, text=self.text, audio_duration=self.audio_duration
+            )
+            self.db.add(self.transcribe_data)
+            self.db.commit()
+            self.db.refresh(self.transcribe_data)
+        except Exception as e:
+            self.db.rollback()
+            raise e
