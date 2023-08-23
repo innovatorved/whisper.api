@@ -32,7 +32,7 @@ def test_create_user_invalid_email():
         "username": test_user_details_2["username"],
         "password": test_user_details_2["password"],
     }
-    response = client.post(f"/api/v1/users/", json=data)
+    response = client.post("/api/v1/users/", json=data)
     assert response.status_code == 422
     assert "value_error" in response.json()["detail"][0]["type"]
     assert "Invalid email" in response.json()["detail"][0]["msg"]
