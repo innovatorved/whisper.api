@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  sync-to-hub:
+  deploy-to-hub:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
