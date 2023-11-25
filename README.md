@@ -94,7 +94,7 @@ curl -X 'POST' \
 
   
 ## 🚀 About Me
-I'm a Developer i will feel the code then write.
+Just try to being a Developer!
 
   
 ## Support
