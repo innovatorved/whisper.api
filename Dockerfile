@@ -5,7 +5,7 @@ WORKDIR /code
 COPY ./requirements.txt /code/requirements.txt
 
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
-RUN apt update && apt install -y ffmpeg
+RUN apt update && apt install -y ffmpeg git cmake build-essential
 
 
 RUN --mount=type=secret,id=ALGORITHM,mode=0444,required=true \
