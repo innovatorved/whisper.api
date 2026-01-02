@@ -45,7 +45,15 @@ Install the required Python packages.
 pip install -r requirements.txt
 ```
 
-### 3. Setup Whisper
+### 3. Setup Environment
+Copy the example environment file and configure it:
+
+```bash
+cp .env.example .env
+# Edit .env with your database credentials and settings
+```
+
+### 4. Setup Whisper
 Run the setup script to clone, build, and configure the Whisper binary.
 
 ```bash
@@ -54,10 +62,25 @@ chmod +x setup_whisper.sh
 ```
 
 ## Running the Project
-To run the project, use the following command:
+
+### Run Locally (without Docker)
+To run the project locally (e.g., inside a Conda environment or virtualenv):
 
 ```bash
+# Ensure your environment is active (e.g., conda activate whisper-api)
 uvicorn app.main:app --reload
+```
+
+### Docker (Production)
+To run the project using Docker:
+
+```bash
+# Build the image
+docker build -t whisper-api .
+
+# Run the container (ensure env vars are passed or secrets used)
+# For local testing with .env file:
+docker run --env-file .env -p 7860:7860 whisper-api
 ```
 
 ## Get Your token

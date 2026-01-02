@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM python:3.10
 
 WORKDIR /code
 
@@ -33,10 +33,14 @@ RUN useradd -m -u 1000 user
 USER user
 ENV HOME=/home/user \
 	PATH=/home/user/.local/bin:$PATH
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR $HOME/app
 
 COPY --chown=user . $HOME/app
+
+# Run setup script to build whisper binary
+RUN chmod +x setup_whisper.sh && ./setup_whisper.sh
 
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
