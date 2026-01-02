@@ -1,4 +1,7 @@
 from os import environ as env
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from typing import Any, Dict, List, Optional, Union
 from pydantic import AnyHttpUrl, field_validator

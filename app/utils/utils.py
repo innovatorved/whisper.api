@@ -74,29 +74,21 @@ def execute_command(command: str) -> str:
 def save_audio_file(file=None):
     if file is None:
         return ""
-    path = f"audio/{uuid.uuid4()}.mp3"
+    path = f"audio/{uuid.uuid4()}.wav"
     with open(path, "wb") as f:
         f.write(file.file.read())
     return path
 
 
 def get_audio_duration(audio_file):
-    """Gets the duration of the audio file in seconds.
-
-    Args:
-      audio_file: The path to the audio file.
-
-    Returns:
-      The duration of the audio file in seconds.
-    """
-
-    with wave.open(audio_file, "rb") as f:
-        frames = f.getnframes()
-        sample_rate = f.getframerate()
-        duration = frames / sample_rate
-        rounded_duration = int(round(duration, 0))
-
-    return rounded_duration
+    """Gets the duration of the audio file in seconds using ffprobe."""
+    try:
+        command = f"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 {audio_file}"
+        duration = subprocess.check_output(command, shell=True).decode("utf-8").strip()
+        return int(round(float(duration), 0))
+    except Exception as e:
+        logging.error(f"Error getting duration: {e}")
+        return 0
 
 
 def get_model_name(model: str = None):

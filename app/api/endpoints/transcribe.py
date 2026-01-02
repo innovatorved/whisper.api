@@ -31,7 +31,7 @@ async def post_audio(
         file_path = save_audio_file(file)
         [data, output_audio_path] = transcribe_file(file_path, get_model_name(model))
         background_tasks.add_task(
-            create_transcribe_record, database, userId, data, output_audio_path
+            create_transcribe_record, database, userId, data, file_path
         )
 
         return Transcription(filename=file.filename, text=data)
