@@ -18,3 +18,13 @@ build/
 */*.txt
 
 log.txt
+binary/
+models/
+whisper.cpp/
+whisper_temp_build/
+
+# Test artifacts
+test.wav
+test.txt
+test_output*
+

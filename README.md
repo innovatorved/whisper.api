@@ -25,14 +25,32 @@ This repository contains code to deploy the API server along with finetuning and
 
 ## Installation
 
-To install the necessary dependencies, run the following command:
+To install the necessary dependencies and setup the Whisper binary, follow these steps:
+
+### 1. System Dependencies
+Install `ffmpeg` for audio processing and build tools (`make`, `cmake`, `g++`) for compiling Whisper.
 
 ```bash
-# Install ffmpeg for Audio Processing
-sudo apt install ffmpeg
+# Ubuntu/Debian
+sudo apt install ffmpeg git make cmake g++
 
-# Install Python Package
+# macOS
+brew install ffmpeg cmake
+```
+
+### 2. Python Dependencies
+Install the required Python packages.
+
+```bash
 pip install -r requirements.txt
+```
+
+### 3. Setup Whisper
+Run the setup script to clone, build, and configure the Whisper binary.
+
+```bash
+chmod +x setup_whisper.sh
+./setup_whisper.sh
 ```
 
 ## Running the Project
@@ -47,7 +65,7 @@ To get your token, use the following command:
 
 ```bash
 curl -X 'POST' \
-  'https://innovatorved-whisper-api.hf.space/api/v1/users/get_token' \
+  'http://localhost:8000/api/v1/users/get_token' \
   -H 'accept: application/json' \
   -H 'Content-Type: application/json' \
   -d '{

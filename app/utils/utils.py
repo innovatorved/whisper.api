@@ -50,7 +50,8 @@ def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin
         rand = uuid.uuid4()
         outputFilePath: str = f"transcribe/{rand}.txt"
         output_audio_path: str = f"audio/{rand}.wav"
-        command: str = f"./binary/whisper -m models/{model} -f {path} {output_audio_path} -nt --output-text {outputFilePath}"
+        output_base: str = f"transcribe/{rand}"
+        command: str = f"./binary/whisper-cli -m models/{model} -f {path} -nt -of {output_base} -otxt"
         execute_command(command)
         f = open(outputFilePath, "r")
         data = f.read()
