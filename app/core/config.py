@@ -31,6 +31,8 @@ class Settings(BaseSettings):
         "http://localhost:8000",
     ]
 
+    MAX_CONCURRENT_TRANSCRIPTIONS: int = env.get("MAX_CONCURRENT_TRANSCRIPTIONS", 2)
+
     @field_validator("SECRET_KEY")
     def secret_key_must_be_set(cls, v: Optional[str], values: Dict[str, Any]) -> str:
         if not v:

@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+import asyncio
 import os
 import re
 import urllib
@@ -42,7 +43,9 @@ def print_routes(app):
     print("\n")
 
 
-def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin"):
+async def transcribe_file(
+    path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin"
+):
     """./binary/whisper -m models/ggml-tiny.en.bin -f Rev.mp3 out.wav -nt --output-text out1.txt"""
     try:
         if path is None:
@@ -51,8 +54,10 @@ def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin
         outputFilePath: str = f"transcribe/{rand}.txt"
         output_audio_path: str = f"audio/{rand}.wav"
         output_base: str = f"transcribe/{rand}"
-        command: str = f"./binary/whisper-cli -m models/{model} -f {path} -nt -of {output_base} -otxt"
-        execute_command(command)
+        command: str = (
+            f"./binary/whisper-cli -m models/{model} -f {path} -nt -of {output_base} -otxt"
+        )
+        await execute_command(command)
         f = open(outputFilePath, "r")
         data = f.read()
         f.close()
@@ -62,12 +67,20 @@ def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin
         raise HTTPException(status_code=400, detail=exc.__str__())
 
 
-def execute_command(command: str) -> str:
+async def execute_command(command: str) -> str:
     try:
-        result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
-        return result.decode("utf-8").strip()
-    except subprocess.CalledProcessError as exc:
-        logging.error(exc.output.decode("utf-8").strip())
+        process = await asyncio.create_subprocess_shell(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            logging.error(stderr.decode("utf-8").strip())
+            raise HTTPException(status_code=400, detail="Error while transcribing")
+
+        return stdout.decode("utf-8").strip()
+    except Exception as exc:
+        logging.error(exc)
         raise HTTPException(status_code=400, detail="Error while transcribing")
 
 

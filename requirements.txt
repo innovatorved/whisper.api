@@ -8,8 +8,10 @@ pytest-cov
 faker
 requests-mock
 passlib
+bcrypt
 httpx
 PyJWT
 python-multipart
 gdown
 pydantic-settings
+black

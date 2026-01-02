@@ -18,8 +18,8 @@ build/
 */*.txt
 
 log.txt
-binary/
-models/
+/binary/
+/models/
 whisper.cpp/
 whisper_temp_build/
 

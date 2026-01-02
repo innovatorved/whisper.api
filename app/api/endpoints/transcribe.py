@@ -13,6 +13,11 @@ from app.utils.utils import (
 )
 from app.core.models import AuthTokenController, TranscribeController
 from app.api.models import Transcription
+from app.core.config import settings
+import asyncio
+
+# Global semaphore to limit concurrent transcriptions
+transcription_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_TRANSCRIPTIONS)
 
 router = APIRouter()
 database = SessionLocal()
@@ -29,7 +34,13 @@ async def post_audio(
     try:
         userId = AuthTokenController(database).get_userid_from_token(Authentication)
         file_path = save_audio_file(file)
-        [data, output_audio_path] = transcribe_file(file_path, get_model_name(model))
+
+        # Acquire semaphore before starting transcription
+        async with transcription_semaphore:
+            [data, output_audio_path] = await transcribe_file(
+                file_path, get_model_name(model)
+            )
+
         background_tasks.add_task(
             create_transcribe_record, database, userId, data, file_path
         )
