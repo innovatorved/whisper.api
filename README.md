@@ -19,6 +19,8 @@ Key features:
 - User level access with API keys for managing usage
 - Self-hostable code for your own speech transcription service
 - Quantized model optimization for fast and efficient inference
+- **Asynchronous Processing**: Non-blocking transcription for high availability
+- **Concurrency Control**: Built-in request queuing to prevent server overload
 - Open source implementation for customization and transparency
 
 This repository contains code to deploy the API server along with finetuning and quantizing models. Check out the documentation for getting started!
@@ -51,6 +53,7 @@ Copy the example environment file and configure it:
 ```bash
 cp .env.example .env
 # Edit .env with your database credentials and settings
+# Optional: Set MAX_CONCURRENT_TRANSCRIPTIONS (default: 2) in .env to control parallel jobs
 ```
 
 ### 4. Setup Whisper
@@ -68,7 +71,7 @@ To run the project locally (e.g., inside a Conda environment or virtualenv):
 
 ```bash
 # Ensure your environment is active (e.g., conda activate whisper-api)
-uvicorn app.main:app --reload
+uvicorn app.main:app --host 0.0.0.0 --port 7860 --reload
 ```
 
 ### Docker (Production)
