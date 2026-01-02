@@ -32,7 +32,7 @@ fi
 # --- 2. Clone Repository ---
 REPO_URL="https://github.com/innovatorved/whisper.cpp.git"
 DIR_NAME="whisper_temp_build"
-BRANCH="master" # Use master or main unless a specific branch is required
+BRANCH="develop" # Use master or main unless a specific branch is required
 
 if [ -d "$DIR_NAME" ]; then
     warn "Directory '$DIR_NAME' already exists. Removing it to ensure a clean build..."

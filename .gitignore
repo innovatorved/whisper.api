@@ -28,3 +28,5 @@ test.wav
 test.txt
 test_output*
 
+binary/
+models/
