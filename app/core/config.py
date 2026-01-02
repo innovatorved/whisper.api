@@ -1,4 +1,7 @@
 from os import environ as env
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from typing import Any, Dict, List, Optional, Union
 from pydantic import AnyHttpUrl, field_validator
@@ -27,6 +30,8 @@ class Settings(BaseSettings):
         "http://localhost:8080",
         "http://localhost:8000",
     ]
+
+    MAX_CONCURRENT_TRANSCRIPTIONS: int = env.get("MAX_CONCURRENT_TRANSCRIPTIONS", 2)
 
     @field_validator("SECRET_KEY")
     def secret_key_must_be_set(cls, v: Optional[str], values: Dict[str, Any]) -> str:

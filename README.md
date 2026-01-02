@@ -19,27 +19,71 @@ Key features:
 - User level access with API keys for managing usage
 - Self-hostable code for your own speech transcription service
 - Quantized model optimization for fast and efficient inference
+- **Asynchronous Processing**: Non-blocking transcription for high availability
+- **Concurrency Control**: Built-in request queuing to prevent server overload
 - Open source implementation for customization and transparency
 
 This repository contains code to deploy the API server along with finetuning and quantizing models. Check out the documentation for getting started!
 
 ## Installation
 
-To install the necessary dependencies, run the following command:
+To install the necessary dependencies and setup the Whisper binary, follow these steps:
+
+### 1. System Dependencies
+Install `ffmpeg` for audio processing and build tools (`make`, `cmake`, `g++`) for compiling Whisper.
 
 ```bash
-# Install ffmpeg for Audio Processing
-sudo apt install ffmpeg
+# Ubuntu/Debian
+sudo apt install ffmpeg git make cmake g++
 
-# Install Python Package
+# macOS
+brew install ffmpeg cmake
+```
+
+### 2. Python Dependencies
+Install the required Python packages.
+
+```bash
 pip install -r requirements.txt
 ```
 
-## Running the Project
-To run the project, use the following command:
+### 3. Setup Environment
+Copy the example environment file and configure it:
 
 ```bash
-uvicorn app.main:app --reload
+cp .env.example .env
+# Edit .env with your database credentials and settings
+# Optional: Set MAX_CONCURRENT_TRANSCRIPTIONS (default: 2) in .env to control parallel jobs
+```
+
+### 4. Setup Whisper
+Run the setup script to clone, build, and configure the Whisper binary.
+
+```bash
+chmod +x setup_whisper.sh
+./setup_whisper.sh
+```
+
+## Running the Project
+
+### Run Locally (without Docker)
+To run the project locally (e.g., inside a Conda environment or virtualenv):
+
+```bash
+# Ensure your environment is active (e.g., conda activate whisper-api)
+uvicorn app.main:app --host 0.0.0.0 --port 7860 --reload
+```
+
+### Docker (Production)
+To run the project using Docker:
+
+```bash
+# Build the image
+docker build -t whisper-api .
+
+# Run the container (ensure env vars are passed or secrets used)
+# For local testing with .env file:
+docker run --env-file .env -p 7860:7860 whisper-api
 ```
 
 ## Get Your token
@@ -47,7 +91,7 @@ To get your token, use the following command:
 
 ```bash
 curl -X 'POST' \
-  'https://innovatorved-whisper-api.hf.space/api/v1/users/get_token' \
+  'http://localhost:8000/api/v1/users/get_token' \
   -H 'accept: application/json' \
   -H 'Content-Type: application/json' \
   -d '{

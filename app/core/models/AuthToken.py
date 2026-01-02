@@ -70,5 +70,4 @@ class AuthTokenController:
         return f"{token_prefix}{token_suffix}"
 
     @staticmethod
-    def validate_bearer_token(request_token: str):
-        ...
+    def validate_bearer_token(request_token: str): ...

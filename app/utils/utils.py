@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+import asyncio
 import os
 import re
 import urllib
@@ -42,7 +43,9 @@ def print_routes(app):
     print("\n")
 
 
-def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin"):
+async def transcribe_file(
+    path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin"
+):
     """./binary/whisper -m models/ggml-tiny.en.bin -f Rev.mp3 out.wav -nt --output-text out1.txt"""
     try:
         if path is None:
@@ -50,8 +53,11 @@ def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin
         rand = uuid.uuid4()
         outputFilePath: str = f"transcribe/{rand}.txt"
         output_audio_path: str = f"audio/{rand}.wav"
-        command: str = f"./binary/whisper -m models/{model} -f {path} {output_audio_path} -nt --output-text {outputFilePath}"
-        execute_command(command)
+        output_base: str = f"transcribe/{rand}"
+        command: str = (
+            f"./binary/whisper-cli -m models/{model} -f {path} -nt -of {output_base} -otxt"
+        )
+        await execute_command(command)
         f = open(outputFilePath, "r")
         data = f.read()
         f.close()
@@ -61,41 +67,41 @@ def transcribe_file(path: str = None, model="ggml-model-whisper-tiny.en-q5_1.bin
         raise HTTPException(status_code=400, detail=exc.__str__())
 
 
-def execute_command(command: str) -> str:
+async def execute_command(command: str) -> str:
     try:
-        result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
-        return result.decode("utf-8").strip()
-    except subprocess.CalledProcessError as exc:
-        logging.error(exc.output.decode("utf-8").strip())
+        process = await asyncio.create_subprocess_shell(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            logging.error(stderr.decode("utf-8").strip())
+            raise HTTPException(status_code=400, detail="Error while transcribing")
+
+        return stdout.decode("utf-8").strip()
+    except Exception as exc:
+        logging.error(exc)
         raise HTTPException(status_code=400, detail="Error while transcribing")
 
 
 def save_audio_file(file=None):
     if file is None:
         return ""
-    path = f"audio/{uuid.uuid4()}.mp3"
+    path = f"audio/{uuid.uuid4()}.wav"
     with open(path, "wb") as f:
         f.write(file.file.read())
     return path
 
 
 def get_audio_duration(audio_file):
-    """Gets the duration of the audio file in seconds.
-
-    Args:
-      audio_file: The path to the audio file.
-
-    Returns:
-      The duration of the audio file in seconds.
-    """
-
-    with wave.open(audio_file, "rb") as f:
-        frames = f.getnframes()
-        sample_rate = f.getframerate()
-        duration = frames / sample_rate
-        rounded_duration = int(round(duration, 0))
-
-    return rounded_duration
+    """Gets the duration of the audio file in seconds using ffprobe."""
+    try:
+        command = f"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 {audio_file}"
+        duration = subprocess.check_output(command, shell=True).decode("utf-8").strip()
+        return int(round(float(duration), 0))
+    except Exception as e:
+        logging.error(f"Error getting duration: {e}")
+        return 0
 
 
 def get_model_name(model: str = None):
