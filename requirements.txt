@@ -8,7 +8,7 @@ pytest-cov
 faker
 requests-mock
 passlib
-bcrypt
+bcrypt<4.0.0
 httpx
 PyJWT
 python-multipart
