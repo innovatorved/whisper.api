@@ -1,14 +1,14 @@
-__pycache__/  
-*.pyc  
-*.pyo  
-*.egg-info/  
-dist/  
-build/  
-.env  
-.idea/  
-.vscode/  
-*.log  
-*.swp  
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.env
+.idea/
+.vscode/
+*.log
+*.swp
 .DS_Store
 /*/*.bin
 */*.bin
@@ -32,3 +32,7 @@ test_output*
 
 binary/
 models/
+token.txt
+
+# Database
+*.db

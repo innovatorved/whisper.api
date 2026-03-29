@@ -3,11 +3,16 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.core.config import settings
 
-POSTGRES_DATABASE_URL = settings.POSTGRES_DATABASE_URL
+DATABASE_URL = settings.DATABASE_URL
 
 meta = MetaData()
 
-engine = create_engine(POSTGRES_DATABASE_URL)
+# SQLite requires check_same_thread=False for multi-threaded access in FastAPI
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
+ 
 Base = declarative_base(metadata=meta)
 
 Base.metadata.create_all(engine)

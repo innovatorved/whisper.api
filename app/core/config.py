@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     SERVER_HOST: AnyHttpUrl = env.get("SERVER_HOST", "http://localhost:7860")
 
     # ── Database ───────────────────────────────────────────────────
-    POSTGRES_DATABASE_URL: str = env.get("POSTGRES_DATABASE_URL", "")
-    TEST_DATABASE_URL: str = env.get("POSTGRES_DATABASE_URL", "")
+    DATABASE_URL: str = env.get("DATABASE_URL", "sqlite:///./whisper.db")
+    TEST_DATABASE_URL: str = env.get("TEST_DATABASE_URL", "sqlite:///./test.db")
 
     # ── CORS ───────────────────────────────────────────────────────
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
@@ -61,12 +61,12 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be set")
         return v
 
-    @field_validator("POSTGRES_DATABASE_URL")
-    def postgres_db_url_must_be_set(
+    @field_validator("DATABASE_URL")
+    def db_url_must_be_set(
         cls, v: Optional[str], values: Dict[str, Any]
     ) -> str:
         if not v:
-            raise ValueError("POSTGRES_DATABASE_URL must be set")
+            raise ValueError("DATABASE_URL must be set")
         return v
 
 
