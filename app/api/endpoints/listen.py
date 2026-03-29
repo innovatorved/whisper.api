@@ -197,8 +197,9 @@ async def listen_pre_recorded(
             ext_map = {
                 "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav",
                 "audio/mp3": "mp3", "audio/mpeg": "mp3",
-                "audio/ogg": "ogg", "audio/flac": "flac",
+                "audio/ogg": "ogg", "audio/flac": "flac", "audio/x-flac": "flac",
                 "audio/webm": "webm", "audio/mp4": "mp4",
+                "audio/m4a": "m4a", "audio/x-m4a": "m4a",
             }
             ext = ext_map.get(content_type, "wav")
             audio_path = save_audio_bytes(audio_bytes, ext)

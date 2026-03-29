@@ -130,14 +130,18 @@ async def transcribe_audio(
     command = " ".join(cmd_parts)
     logger.info(f"Running whisper-cli: {command}")
 
-    await execute_command(command)
+    stdout, stderr, code = await execute_command(command)
 
     # Read output
     out_path = f"{output_base}{output_ext}"
     if not os.path.exists(out_path):
+        # Even if exit code is 0, if output is missing it means it failed
+        # Include stderr to explain why it failed
+        error_msg = stderr if stderr else "No error message captured"
+        logger.error(f"Whisper transcription failed to produce output: {error_msg}")
         raise HTTPException(
             status_code=500,
-            detail=f"Whisper transcription succeeded but {output_ext} output not found",
+            detail=f"Transcription (whisper-cli) failed to produce {output_ext} output. Error: {error_msg}",
         )
 
     if response_format in ("srt", "vtt"):
@@ -353,12 +357,23 @@ async def convert_audio_to_wav(input_path: str) -> str:
     )
 
     try:
-        await execute_command(command)
+        stdout, stderr, code = await execute_command(command)
+        if code != 0:
+            logger.error(f"ffmpeg conversion failed with code {code}: {stderr}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Audio conversion failed: {stderr}",
+            )
         return output_path
-    except Exception:
-        # If conversion fails, try using original file
-        logger.warning(f"ffmpeg conversion failed for {input_path}, using original")
-        return input_path
+    except Exception as e:
+        # Don't fall back to original file because whisper-cli (this build) requires WAV
+        if isinstance(e, HTTPException):
+            raise
+        logger.error(f"Error during audio conversion: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error executing audio conversion: {str(e)}",
+        )
 
 
 def get_audio_duration(audio_file: str) -> float:
@@ -440,25 +455,18 @@ def list_available_models() -> list:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-async def execute_command(command: str) -> str:
-    """Execute a shell command asynchronously."""
+async def execute_command(command: str) -> Tuple[str, str, int]:
+    """
+    Execute a shell command asynchronously.
+    Returns (stdout, stderr, returncode).
+    """
     try:
         process = await asyncio.create_subprocess_shell(
             command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         stdout, stderr = await process.communicate()
 
-        if process.returncode != 0:
-            error_msg = stderr.decode("utf-8").strip()
-            logger.error(f"Command failed: {error_msg}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Transcription process failed: {error_msg}",
-            )
-
-        return stdout.decode("utf-8").strip()
-    except HTTPException:
-        raise
+        return stdout.decode("utf-8").strip(), stderr.decode("utf-8").strip(), process.returncode
     except Exception as exc:
         logger.error(f"Command execution error: {exc}")
         raise HTTPException(
