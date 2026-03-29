@@ -29,9 +29,6 @@ whisper_temp_build/
 test.wav
 test.txt
 test_output*
-
-binary/
-models/
 token.txt
 
 # Database
