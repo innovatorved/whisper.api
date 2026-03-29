@@ -16,6 +16,8 @@ build/
 */*.wav
 */*.mp3
 */*.txt
+*/*.srt
+*/*.json
 
 log.txt
 /binary/
