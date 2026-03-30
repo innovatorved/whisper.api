@@ -45,6 +45,8 @@ For detailed guides, please refer to the documentation in the `docs/` folder:
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
+chmod +x setup_whisper.sh
+./setup_whisper.sh
 ```
 
 ### 2. Setup Database & Keys

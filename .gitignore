@@ -33,3 +33,5 @@ token.txt
 
 # Database
 *.db
+binary/
+models/
