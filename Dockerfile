@@ -30,10 +30,13 @@ USER user
 WORKDIR $HOME/app
 
 # Copy application code
+ARG CACHEBUST=1
+RUN echo "Cache bust: $CACHEBUST"
 COPY --chown=user:user . $HOME/app
 
 # Build whisper binary from source
-RUN chmod +x ./setup_whisper.sh && ./setup_whisper.sh
+# Run setup_whisper_new.sh with cache-busting comment
+RUN ls -la && chmod +x ./setup_whisper_new.sh && ./setup_whisper_new.sh
 
 # Expose the API port (standard for HF Spaces)
 EXPOSE 7860
