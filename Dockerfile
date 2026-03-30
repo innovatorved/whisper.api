@@ -36,7 +36,7 @@ COPY --chown=user:user . $HOME/app
 
 # Build whisper binary from source
 # Run setup_whisper_new.sh with cache-busting comment
-RUN ls -la && chmod +x ./setup_whisper_new.sh && ./setup_whisper_new.sh
+RUN chmod +x ./setup_whisper.sh && ./setup_whisper.sh
 
 # Expose the API port (standard for HF Spaces)
 EXPOSE 7860
