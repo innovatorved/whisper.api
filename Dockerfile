@@ -30,8 +30,6 @@ USER user
 WORKDIR $HOME/app
 
 # Copy application code
-ARG CACHEBUST=1
-RUN echo "Cache bust: $CACHEBUST"
 COPY --chown=user:user . $HOME/app
 
 # Build whisper binary from source
