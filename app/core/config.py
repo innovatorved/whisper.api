@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     # ── Streaming ──────────────────────────────────────────────────
     STREAM_CHUNK_DURATION_MS: int = int(
-        env.get("STREAM_CHUNK_DURATION_MS", 5000)
+        env.get("STREAM_CHUNK_DURATION_MS", 2000)
     )
 
     # ── Validators ─────────────────────────────────────────────────

@@ -40,13 +40,23 @@ curl -X POST 'http://localhost:7860/v1/listen?response_format=srt' \
 
 ## Live Streaming
 
+### File-based streaming test (Python)
+Stream a pre-recorded audio file to the WebSocket endpoint, simulating real-time input.
+```bash
+python examples/test_streaming.py --token YOUR_API_KEY --audio audio/jfk.wav --model tiny.en
+```
+
+### Live microphone transcription (Python)
+Stream audio from your microphone for real-time transcription.
+```bash
+python examples/mic_transcription.py --token YOUR_API_KEY --model tiny.en
+```
+
 ### WebSocket Connection (using `wscat`)
 Connect to the real-time stream and monitor transcription results.
 ```bash
 wscat -c "ws://localhost:7860/v1/listen?token=YOUR_API_KEY&model=tiny.en"
 ```
-
-*Note: For streaming raw audio bytes via terminal, you can pipe a binary stream into a socket tool or use a custom script.*
 
 ---
 

@@ -11,7 +11,7 @@ def create_key(name):
         db.add(new_key)
         db.commit()
         db.refresh(new_key)
-        print("✅ API Key Created Successfully!")
+        print("API Key Created Successfully!")
         print("-" * 40)
         print(f"Name:  {name if name else 'Unnamed'}")
         print(f"Token: {token_string}")
@@ -28,7 +28,7 @@ def list_keys():
             print("No API keys found.")
             return
         
-        print("🔑 Active API Keys")
+        print("Active API Keys")
         print("-" * 60)
         for k in keys:
             print(f"Token: {k.token[:8]}*** | Name: {k.name} | Created: {k.created_at}")
@@ -51,14 +51,14 @@ def revoke_key(token_prefix):
         key_to_delete = keys[0]
         db.delete(key_to_delete)
         db.commit()
-        print(f"✅ Successfully revoked key '{key_to_delete.name or 'Unnamed'}' starting with {key_to_delete.token[:8]}")
+        print(f"Successfully revoked key '{key_to_delete.name or 'Unnamed'}' starting with {key_to_delete.token[:8]}")
     finally:
         db.close()
 
 def init_db():
     print("Initializing Database structure...")
     Base.metadata.create_all(bind=engine)
-    print("✅ Database initialized successfully.")
+    print("Database initialized successfully.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Whisper API Offline Key Manager")

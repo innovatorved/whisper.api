@@ -271,6 +271,9 @@ async def listen_pre_recorded(
 # LIVE STREAMING AUDIO — WS /v1/listen
 # ═══════════════════════════════════════════════════════════════════════
 
+# Minimum audio size for whisper-cli to produce output (0.5s of 16kHz 16-bit mono)
+MIN_AUDIO_BYTES = int(STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH * 0.5)
+
 
 @router.websocket("")
 async def listen_streaming(
@@ -281,28 +284,38 @@ async def listen_streaming(
     diarize: bool = Query(False),
     detect_language: bool = Query(False),
     utterances: bool = Query(False),
-    # Auth via query param for WebSocket
+    # Optional token query param
     token: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
     Live streaming audio transcription via WebSocket.
 
-    **Client sends:** Raw audio bytes (16kHz, 16-bit, mono PCM)
-    **Server sends:** JSON StreamingResult messages
-
-    **Control messages (JSON from client):**
-    - `{"type": "KeepAlive"}` — Keep connection alive without sending audio
-    - `{"type": "CloseStream"}` — Gracefully close the connection
+    Buffers incoming PCM audio data (16kHz, 16-bit, mono) and transcribes
+    in chunks using whisper-cli. Returns Deepgram-compatible streaming results.
     """
-    # Validate auth
-    if not token:
-        await websocket.close(code=4001, reason="Missing token query parameter. Send ?token=...")
+    # 1. Extract token from Query or Headers
+    auth_token = token
+    if not auth_token:
+        # Check Authorization header (Deepgram SDK style)
+        auth_header = websocket.headers.get("authorization")
+        if auth_header and auth_header.lower().startswith("token "):
+            auth_token = auth_header.split(" ", 1)[1].strip()
+        elif auth_header and auth_header.lower().startswith("bearer "):
+            # Supporting Bearer for compatibility
+            auth_token = auth_header.split(" ", 1)[1].strip()
+
+    if not auth_token:
+        await websocket.close(
+            code=4001,
+            reason="Missing API token. Send '?token=...' query or 'Authorization: Token ...' header."
+        )
         return
-        
-    record = db.query(ApiKey).filter(ApiKey.token == token).first()
+
+    # 2. Validate against DB
+    record = db.query(ApiKey).filter(ApiKey.token == auth_token).first()
     if not record:
-        await websocket.close(code=4001, reason="Invalid API key")
+        await websocket.close(code=4001, reason="Invalid or revoked API key")
         return
 
     await websocket.accept()
@@ -311,12 +324,38 @@ async def listen_streaming(
     audio_buffer = bytearray()
     chunk_start_time = 0.0
     total_duration = 0.0
+    chunks_processed = 0
 
     # Calculate buffer threshold (bytes for N seconds of 16kHz 16-bit mono)
     chunk_duration_s = settings.STREAM_CHUNK_DURATION_MS / 1000.0
     buffer_threshold = int(STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH * STREAM_CHANNELS * chunk_duration_s)
 
-    logger.info(f"Streaming session {request_id} started. Buffer threshold: {buffer_threshold} bytes")
+    logger.info(
+        f"[WS:{request_id}] Session started. "
+        f"model={model}, buffer_threshold={buffer_threshold} bytes ({chunk_duration_s}s), "
+        f"min_audio={MIN_AUDIO_BYTES} bytes"
+    )
+
+    # 3. Send initial metadata (Deepgram SDK expects this on connect)
+    try:
+        open_message = {
+            "type": "Metadata",
+            "request_id": request_id,
+            "model_info": {
+                model: {
+                    "name": f"whisper-{model}",
+                    "version": "ggml-v1",
+                    "arch": "whisper",
+                }
+            },
+            "channels": 1,
+            "created": __import__("datetime").datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        }
+        await websocket.send_json(open_message)
+        logger.info(f"[WS:{request_id}] Sent initial Metadata message")
+    except Exception as e:
+        logger.error(f"[WS:{request_id}] Failed to send Metadata: {e}")
+        return
 
     try:
         while True:
@@ -325,42 +364,69 @@ async def listen_streaming(
                     websocket.receive(), timeout=30.0
                 )
             except asyncio.TimeoutError:
-                # Send keepalive response
+                logger.debug(f"[WS:{request_id}] Timeout, no data received for 30s")
                 continue
 
             if "text" in data:
                 # Handle control messages
+                text_data = data["text"]
+                logger.info(f"[WS:{request_id}] Received text message: {text_data[:200]}")
                 try:
-                    msg = json.loads(data["text"])
+                    msg = json.loads(text_data)
                     msg_type = msg.get("type", "")
 
                     if msg_type == "CloseStream":
+                        logger.info(f"[WS:{request_id}] CloseStream received. Buffer: {len(audio_buffer)} bytes")
                         # Process any remaining buffer before closing
-                        if len(audio_buffer) > STREAM_SAMPLE_RATE:  # >0.5s of audio
-                            result = await _process_stream_chunk(
+                        if len(audio_buffer) >= MIN_AUDIO_BYTES:
+                            result = await _process_stream_chunk_safe(
                                 audio_buffer, request_id, model, language,
                                 translate, diarize, detect_language,
                                 chunk_start_time, is_final=True, speech_final=True,
                             )
                             await websocket.send_json(result)
+                            chunks_processed += 1
+                        else:
+                            logger.info(
+                                f"[WS:{request_id}] Remaining buffer too small "
+                                f"({len(audio_buffer)} < {MIN_AUDIO_BYTES} bytes), skipping"
+                            )
                         break
 
                     elif msg_type == "KeepAlive":
+                        logger.debug(f"[WS:{request_id}] KeepAlive received")
                         continue
+                    else:
+                        logger.info(f"[WS:{request_id}] Unknown text message type: {msg_type}")
 
                 except json.JSONDecodeError:
-                    pass  # Not JSON, ignore
+                    logger.warning(f"[WS:{request_id}] Non-JSON text received: {text_data[:100]}")
 
             elif "bytes" in data:
-                # Audio data
-                audio_buffer.extend(data["bytes"])
+                # Audio data received
+                audio_bytes = data["bytes"]
+                audio_buffer.extend(audio_bytes)
+
+                # Visual feedback
+                print(".", end="", flush=True)
+
+                # Log every ~1 second of incoming audio
+                if len(audio_buffer) % 32768 < len(audio_bytes):
+                    logger.info(
+                        f"[WS:{request_id}] Audio buffer: {len(audio_buffer)}/{buffer_threshold} bytes "
+                        f"({len(audio_buffer) / (STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH):.1f}s)"
+                    )
 
                 # Process when buffer reaches threshold
                 if len(audio_buffer) >= buffer_threshold:
+                    chunk_size = len(audio_buffer)
+                    print(f"\n[WS:{request_id}] Buffer full ({chunk_size} bytes). Transcribing chunk #{chunks_processed + 1}...")
+                    logger.info(f"[WS:{request_id}] Processing chunk #{chunks_processed + 1} ({chunk_size} bytes)")
+
                     chunk_data = bytes(audio_buffer)
                     audio_buffer.clear()
 
-                    result = await _process_stream_chunk(
+                    result = await _process_stream_chunk_safe(
                         chunk_data, request_id, model, language,
                         translate, diarize, detect_language,
                         chunk_start_time, is_final=True, speech_final=False,
@@ -369,22 +435,54 @@ async def listen_streaming(
                     chunk_duration = len(chunk_data) / (STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH)
                     chunk_start_time += chunk_duration
                     total_duration += chunk_duration
+                    chunks_processed += 1
+
+                    # Log the result
+                    transcript = result.get("channel", {}).get("alternatives", [{}])[0].get("transcript", "")
+                    err = result.get("error")
+                    if err:
+                        print(f"[WS:{request_id}] [WARN] Chunk error: {err}")
+                        logger.error(f"[WS:{request_id}] Chunk #{chunks_processed} error: {err}")
+                    else:
+                        print(f"[WS:{request_id}] [OK] Result: '{transcript}'")
+                        logger.info(f"[WS:{request_id}] Chunk #{chunks_processed} transcript: '{transcript}'")
 
                     await websocket.send_json(result)
 
+            else:
+                # Check for WebSocket disconnect frame
+                frame_type = data.get("type", "")
+                if frame_type == "websocket.disconnect":
+                    logger.info(f"[WS:{request_id}] Received disconnect frame (code={data.get('code', '?')})")
+                    break
+                else:
+                    logger.info(f"[WS:{request_id}] Received frame with keys: {list(data.keys())}")
+
     except WebSocketDisconnect:
-        logger.info(f"Streaming session {request_id} disconnected")
+        logger.info(f"[WS:{request_id}] Client disconnected")
+    except RuntimeError as e:
+        # Handle "Cannot call 'receive' once a disconnect message has been received"
+        logger.info(f"[WS:{request_id}] Connection closed: {e}")
     except Exception as e:
-        logger.error(f"Streaming error in session {request_id}: {e}")
+        logger.error(f"[WS:{request_id}] Unhandled error: {type(e).__name__}: {e}", exc_info=True)
         try:
-            await websocket.close(code=1011, reason=str(e))
+            error_msg = {
+                "type": "Error",
+                "message": str(e),
+                "request_id": request_id,
+            }
+            await websocket.send_json(error_msg)
+            await websocket.close(code=1011, reason=str(e)[:120])
         except Exception:
             pass
     finally:
-        logger.info(f"Streaming session {request_id} ended. Total duration: {total_duration:.2f}s")
+        logger.info(
+            f"[WS:{request_id}] Session ended. "
+            f"Chunks processed: {chunks_processed}, Total duration: {total_duration:.2f}s"
+        )
 
 
-async def _process_stream_chunk(
+async def _process_stream_chunk_safe(
     audio_data: bytes,
     request_id: str,
     model: str,
@@ -396,14 +494,29 @@ async def _process_stream_chunk(
     is_final: bool = True,
     speech_final: bool = False,
 ) -> dict:
-    """Process a chunk of streaming audio and return a StreamingResult."""
+    """
+    Process a chunk of streaming audio and return a Deepgram-compatible result.
 
-    # Save PCM data as WAV
-    wav_path = create_wav_from_pcm(audio_data)
+    This is a 'safe' wrapper that never raises — errors are returned as part of
+    the result dict so the WebSocket handler can forward them to the client.
+    """
+    duration = len(audio_data) / (STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH)
+    wav_path = None
 
     try:
-        duration = len(audio_data) / (STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH)
+        # Validate minimum audio size
+        if len(audio_data) < MIN_AUDIO_BYTES:
+            logger.warning(
+                f"[WS:{request_id}] Audio chunk too short ({len(audio_data)} bytes, "
+                f"need {MIN_AUDIO_BYTES}). Returning empty result."
+            )
+            return _empty_streaming_result(request_id, model, start_time, duration, is_final, speech_final)
 
+        # Save PCM data as WAV
+        wav_path = create_wav_from_pcm(audio_data)
+        logger.info(f"[WS:{request_id}] Created temp WAV: {wav_path} ({os.path.getsize(wav_path)} bytes)")
+
+        # Run whisper-cli
         async with _transcription_semaphore:
             whisper_json, _ = await transcribe_audio(
                 audio_path=wav_path,
@@ -413,6 +526,8 @@ async def _process_stream_chunk(
                 diarize=diarize,
                 detect_language=detect_language,
             )
+
+        logger.info(f"[WS:{request_id}] Whisper returned. Segments: {len(whisper_json.get('transcription', []))}")
 
         # Parse the whisper output
         deepgram_response = parse_whisper_json_to_deepgram(
@@ -444,10 +559,58 @@ async def _process_stream_chunk(
 
         return result
 
+    except HTTPException as e:
+        # whisper-cli failure (model not found, transcription failed, etc.)
+        logger.error(f"[WS:{request_id}] Transcription HTTPException: {e.detail}")
+        return _error_streaming_result(request_id, model, start_time, duration, str(e.detail), is_final, speech_final)
+
+    except Exception as e:
+        logger.error(f"[WS:{request_id}] Unexpected error in chunk processing: {type(e).__name__}: {e}", exc_info=True)
+        return _error_streaming_result(request_id, model, start_time, duration, str(e), is_final, speech_final)
+
     finally:
         # Cleanup temp WAV file
-        if os.path.exists(wav_path):
+        if wav_path and os.path.exists(wav_path):
             try:
                 os.remove(wav_path)
             except OSError:
                 pass
+
+
+def _empty_streaming_result(
+    request_id: str, model: str, start_time: float, duration: float,
+    is_final: bool, speech_final: bool,
+) -> dict:
+    """Return a valid but empty streaming result (no speech detected)."""
+    return {
+        "type": "Results",
+        "channel_index": [0, 1],
+        "duration": round(duration, 2),
+        "start": round(start_time, 2),
+        "is_final": is_final,
+        "speech_final": speech_final,
+        "channel": {
+            "alternatives": [
+                {
+                    "transcript": "",
+                    "confidence": 0.0,
+                    "words": [],
+                }
+            ],
+        },
+        "metadata": {
+            "request_id": request_id,
+            "model_info": {model: {"name": f"whisper-{model}", "version": "ggml-v1", "arch": "whisper"}},
+        },
+        "from_finalize": False,
+    }
+
+
+def _error_streaming_result(
+    request_id: str, model: str, start_time: float, duration: float,
+    error_msg: str, is_final: bool, speech_final: bool,
+) -> dict:
+    """Return a streaming result that includes an error field."""
+    result = _empty_streaming_result(request_id, model, start_time, duration, is_final, speech_final)
+    result["error"] = error_msg
+    return result

@@ -4,6 +4,7 @@ Whisper Speech-to-Text API
 A self-hosted speech-to-text API powered by whisper.cpp.
 """
 
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -13,6 +14,13 @@ from app.core.config import settings
 from app.core.errors import error_handler
 from app.utils import print_routes
 from app.utils.checks import run_checks
+
+# Configure logging to show all info messages in the console
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:     %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 if not run_checks():
     raise Exception("Failed to pass all checks")

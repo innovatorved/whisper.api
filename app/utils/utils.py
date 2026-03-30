@@ -128,20 +128,25 @@ async def transcribe_audio(
         cmd_parts.extend(["-d", str(duration_ms)])
 
     command = " ".join(cmd_parts)
-    logger.info(f"Running whisper-cli: {command}")
-
+    print(f"\n[AI EXECUTE] {command}")
+    logger.info(f"[{request_id}] Executing whisper-cli: {command}")
+    
+    start_time_exec = asyncio.get_event_loop().time()
     stdout, stderr, code = await execute_command(command)
+    end_time_exec = asyncio.get_event_loop().time()
+    
+    duration = end_time_exec - start_time_exec
+    print(f"[AI FINISHED] Task {request_id} in {duration:.2f}s with code {code}.")
+    logger.info(f"[{request_id}] Command finished in {duration:.2f}s with code {code}.")
 
     # Read output
     out_path = f"{output_base}{output_ext}"
     if not os.path.exists(out_path):
-        # Even if exit code is 0, if output is missing it means it failed
-        # Include stderr to explain why it failed
-        error_msg = stderr if stderr else "No error message captured"
-        logger.error(f"Whisper transcription failed to produce output: {error_msg}")
+        print(f"[AI ERROR] Output file missing for task {request_id}!")
+        logger.error(f"[{request_id}] Output file {out_path} missing. stdout: '{stdout}', stderr: '{stderr}'")
         raise HTTPException(
             status_code=500,
-            detail=f"Transcription (whisper-cli) failed to produce {output_ext} output. Error: {error_msg}",
+            detail=f"Transcription failed: output missing. Error: {stderr}",
         )
 
     if response_format in ("srt", "vtt"):
@@ -150,6 +155,7 @@ async def transcribe_audio(
     else:
         with open(out_path, "r", encoding="utf-8") as f:
             whisper_output = json.load(f)
+            logger.info(f"[{request_id}] Parsed Whisper JSON output successfully.")
 
     # Cleanup output files
     _cleanup_files(output_base)

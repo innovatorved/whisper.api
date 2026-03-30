@@ -171,8 +171,8 @@ SUPPORTED_AUDIO_CONTENT_TYPES = {
 
 # ─── Streaming Configuration Defaults ────────────────────────────────
 
-DEFAULT_STREAM_CHUNK_DURATION_MS = 5000   # 5 seconds per chunk
-DEFAULT_STREAM_BUFFER_SIZE = 16000 * 2 * 5  # 5 seconds at 16kHz, 16-bit mono
+DEFAULT_STREAM_CHUNK_DURATION_MS = 2000   # 2 seconds per chunk
+DEFAULT_STREAM_BUFFER_SIZE = 16000 * 2 * 2  # 2 seconds at 16kHz, 16-bit mono
 STREAM_SAMPLE_RATE = 16000
 STREAM_CHANNELS = 1
 STREAM_SAMPLE_WIDTH = 2  # 16-bit = 2 bytes
