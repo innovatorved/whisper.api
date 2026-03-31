@@ -15,6 +15,7 @@ import struct
 import subprocess
 import tempfile
 import urllib
+import shlex
 import uuid
 import wave
 from datetime import datetime
@@ -128,22 +129,25 @@ async def transcribe_audio(
         cmd_parts.extend(["-d", str(duration_ms)])
 
     command = " ".join(cmd_parts)
-    print(f"\n[AI EXECUTE] {command}")
-    logger.info(f"[{request_id}] Executing whisper-cli: {command}")
+    logger.info(
+        f"[{request_id}] Starting transcription "
+        f"(model={model}, format={response_format}, translate={translate}, detect_language={detect_language})"
+    )
+    logger.debug(f"[{request_id}] whisper-cli argv: {shlex.join(cmd_parts)}")
     
     start_time_exec = asyncio.get_event_loop().time()
     stdout, stderr, code = await execute_command(command)
     end_time_exec = asyncio.get_event_loop().time()
     
     duration = end_time_exec - start_time_exec
-    print(f"[AI FINISHED] Task {request_id} in {duration:.2f}s with code {code}.")
-    logger.info(f"[{request_id}] Command finished in {duration:.2f}s with code {code}.")
+    logger.info(f"[{request_id}] Transcription finished in {duration:.2f}s (exit_code={code}).")
 
     # Read output
     out_path = f"{output_base}{output_ext}"
     if not os.path.exists(out_path):
-        print(f"[AI ERROR] Output file missing for task {request_id}!")
-        logger.error(f"[{request_id}] Output file {out_path} missing. stdout: '{stdout}', stderr: '{stderr}'")
+        logger.error(f"[{request_id}] Output file {out_path} missing after whisper-cli execution.")
+        logger.debug(f"[{request_id}] whisper-cli stdout: {stdout}")
+        logger.debug(f"[{request_id}] whisper-cli stderr: {stderr}")
         raise HTTPException(
             status_code=500,
             detail=f"Transcription failed: output missing. Error: {stderr}",
@@ -155,7 +159,7 @@ async def transcribe_audio(
     else:
         with open(out_path, "r", encoding="utf-8") as f:
             whisper_output = json.load(f)
-            logger.info(f"[{request_id}] Parsed Whisper JSON output successfully.")
+            logger.debug(f"[{request_id}] Parsed Whisper JSON output successfully.")
 
     # Cleanup output files
     _cleanup_files(output_base)

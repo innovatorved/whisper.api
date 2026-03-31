@@ -11,6 +11,7 @@ Supports:
 """
 
 import asyncio
+from datetime import datetime, timezone
 import io
 import json
 import logging
@@ -486,7 +487,7 @@ async def listen_streaming(
                 }
             },
             "channels": 1,
-            "created": __import__("datetime").datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         }
         await websocket.send_json(open_message)
         logger.info(f"[WS:{request_id}] Sent initial Metadata message")
@@ -545,12 +546,9 @@ async def listen_streaming(
                 audio_bytes = data["bytes"]
                 audio_buffer.extend(audio_bytes)
 
-                # Visual feedback
-                print(".", end="", flush=True)
-
                 # Log every ~1 second of incoming audio
                 if len(audio_buffer) % 32768 < len(audio_bytes):
-                    logger.info(
+                    logger.debug(
                         f"[WS:{request_id}] Audio buffer: {len(audio_buffer)}/{buffer_threshold} bytes "
                         f"({len(audio_buffer) / (STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH):.1f}s)"
                     )
@@ -558,7 +556,6 @@ async def listen_streaming(
                 # Process when buffer reaches threshold
                 if len(audio_buffer) >= buffer_threshold:
                     chunk_size = len(audio_buffer)
-                    print(f"\n[WS:{request_id}] Buffer full ({chunk_size} bytes). Transcribing chunk #{chunks_processed + 1}...")
                     logger.info(f"[WS:{request_id}] Processing chunk #{chunks_processed + 1} ({chunk_size} bytes)")
 
                     chunk_data = bytes(audio_buffer)
@@ -580,11 +577,13 @@ async def listen_streaming(
                     transcript = result.get("channel", {}).get("alternatives", [{}])[0].get("transcript", "")
                     err = result.get("error")
                     if err:
-                        print(f"[WS:{request_id}] [WARN] Chunk error: {err}")
                         logger.error(f"[WS:{request_id}] Chunk #{chunks_processed} error: {err}")
                     else:
-                        print(f"[WS:{request_id}] [OK] Result: '{transcript}'")
-                        logger.info(f"[WS:{request_id}] Chunk #{chunks_processed} transcript: '{transcript}'")
+                        logger.info(
+                            f"[WS:{request_id}] Chunk #{chunks_processed} complete "
+                            f"(transcript_chars={len(transcript)})"
+                        )
+                        logger.debug(f"[WS:{request_id}] Chunk #{chunks_processed} transcript: '{transcript}'")
 
                     await websocket.send_json(result)
 
@@ -661,7 +660,7 @@ async def _process_stream_chunk_safe(
                 return _empty_streaming_result(request_id, model, start_time, duration, is_final, speech_final)
 
             wav_path = create_wav_from_pcm(audio_data, sample_rate=sample_rate)
-            logger.info(
+            logger.debug(
                 f"[WS:{request_id}] Created PCM WAV: {wav_path} "
                 f"({os.path.getsize(wav_path)} bytes, sample_rate={sample_rate})"
             )
@@ -673,7 +672,7 @@ async def _process_stream_chunk_safe(
             source_path = save_audio_bytes(audio_data, extension=extension)
             wav_path = await convert_audio_to_wav(source_path)
             duration = get_audio_duration(wav_path)
-            logger.info(
+            logger.debug(
                 f"[WS:{request_id}] Decoded {resolved_encoding} chunk via ffmpeg "
                 f"to WAV: {wav_path} ({duration:.2f}s)"
             )
@@ -695,7 +694,7 @@ async def _process_stream_chunk_safe(
                 detect_language=detect_language,
             )
 
-        logger.info(f"[WS:{request_id}] Whisper returned. Segments: {len(whisper_json.get('transcription', []))}")
+        logger.debug(f"[WS:{request_id}] Whisper returned. Segments: {len(whisper_json.get('transcription', []))}")
 
         # Parse the whisper output
         deepgram_response = parse_whisper_json_to_deepgram(
