@@ -19,6 +19,8 @@ build/
 */*.srt
 */*.json
 
+.cachebust
+
 log.txt
 /binary/
 /models/
