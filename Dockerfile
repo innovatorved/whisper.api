@@ -25,6 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --chown=user:user requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
+# Add test token endpoint flag explicitly
+ENV ENABLE_TEST_TOKEN_ENDPOINT=false
+
 # Switch to non-root user
 USER user
 WORKDIR $HOME/app

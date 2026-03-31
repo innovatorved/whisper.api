@@ -55,6 +55,8 @@ python -m app.cli init
 python -m app.cli create --name "MyAdminKey"
 ```
 
+*Note: For testing purposes, you can enable a public token generation endpoint in the Swagger UI (`/docs`) by setting `ENABLE_TEST_TOKEN_ENDPOINT=true` in your `.env` file.*
+
 ### 3. Start the Server
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 7860

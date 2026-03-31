@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
         env.get("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 7)
     )
+    ENABLE_TEST_TOKEN_ENDPOINT: bool = env.get("ENABLE_TEST_TOKEN_ENDPOINT", "false").lower() == "true"
 
     # ── Server ─────────────────────────────────────────────────────
     SERVER_NAME: str = env.get("SERVER_NAME", "whisper.api")

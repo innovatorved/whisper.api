@@ -39,6 +39,9 @@ To permanently revoke access, pass the token prefix:
 python -m app.cli revoke <token_prefix>
 ```
 
+### Swagger UI Testing Tokens
+If you are running the system in a testing or sandbox environment where you want users to quickly generate a token from the Swagger UI (`/docs`), you can enable the public `/v1/auth/test-token` endpoint by setting `ENABLE_TEST_TOKEN_ENDPOINT=true` as an environment variable or in your `.env` file. Do not enable this in production environments!
+
 ## Using the API Key
 
 For all REST API and WebSocket requests, the token must be passed in the `Authorization` header.
