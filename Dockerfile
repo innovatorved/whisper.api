@@ -1,46 +1,46 @@
-FROM python:3.10
+FROM python:3.10-slim-bookworm
 
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
+
+# Create non-root user
+RUN useradd -m -u 1000 user
+
+# Set working directory
 WORKDIR /code
 
-COPY ./requirements.txt /code/requirements.txt
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    curl \
+    git \
+    cmake \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
+# Optimize layer caching for python dependencies
+COPY --chown=user:user requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
-RUN apt update && apt install -y ffmpeg git cmake build-essential
 
+# Add test token endpoint flag explicitly
+ENV ENABLE_TEST_TOKEN_ENDPOINT=false
 
-RUN --mount=type=secret,id=ALGORITHM,mode=0444,required=true \
-    file_contents=$(cat /run/secrets/ALGORITHM) && \
-    export ALGORITHM="$file_contents"
-
-RUN --mount=type=secret,id=SERVER_NAME,mode=0444,required=true \
-    file_contents=$(cat /run/secrets/SERVER_NAME) && \
-    export SERVER_NAME="$file_contents"
-
-RUN --mount=type=secret,id=SECRET_KEY,mode=0444,required=true \
-    file_contents=$(cat /run/secrets/SECRET_KEY) && \
-    export SECRET_KEY="$file_contents"
-
-RUN --mount=type=secret,id=SERVER_HOST,mode=0444,required=true \
-    file_contents=$(cat /run/secrets/SERVER_HOST) && \
-    export SERVER_HOST="$file_contents"
-
-RUN --mount=type=secret,id=POSTGRES_DATABASE_URL,mode=0444,required=true \
-    file_contents=$(cat /run/secrets/POSTGRES_DATABASE_URL) && \
-    export POSTGRES_DATABASE_URL="$file_contents"
-
-
-RUN useradd -m -u 1000 user
+# Switch to non-root user
 USER user
-ENV HOME=/home/user \
-	PATH=/home/user/.local/bin:$PATH
-ENV PYTHONUNBUFFERED=1
-
 WORKDIR $HOME/app
 
-COPY --chown=user . $HOME/app
+# Copy application code
+COPY --chown=user:user . $HOME/app
 
-# Run setup script to build whisper binary
-RUN chmod +x setup_whisper.sh && ./setup_whisper.sh
+# Build whisper binary from source
+# Run setup_whisper_new.sh with cache-busting comment
+RUN chmod +x ./setup_whisper.sh && ./setup_whisper.sh
 
+# Expose the API port (standard for HF Spaces)
+EXPOSE 7860
 
+# Default command to run the API
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]

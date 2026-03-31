@@ -5,7 +5,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.main import app
-from app.tests.utils.utils import override_get_db, get_db
 
 # Create test database
 TEST_DATABASE_URL = settings.TEST_DATABASE_URL
@@ -20,15 +19,3 @@ def test_client():
         yield client
 
 
-# Define test database
-@pytest.fixture(scope="module")
-def test_db():
-    db = TestingSessionLocal()
-    yield db
-    db.close()
-
-
-# Override get_db function for testing
-@pytest.fixture(autouse=True)
-def override_get_db(monkeypatch):
-    monkeypatch.setattr("app.api.dependencies.get_db", get_db)

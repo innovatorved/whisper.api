@@ -49,17 +49,44 @@ MAKE_ARGS=""
 
 log "Detected Platform: $OS"
 
+# Detect CPU architecture
+ARCH=$(uname -m)
+log "Detected Architecture: $ARCH"
+
+CMAKE_FLAGS="-DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON"
+
 if [ "$OS" = "Darwin" ]; then
     log "macOS detected. Using default build."
 elif [ "$OS" = "Linux" ]; then
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+        log "ARM64 architecture detected. Using conservative ARM flags..."
+        # Avoid passing CFLAGS which confuses CMake feature detection. Explicitly disable native optimizations 
+        # and specify the base target arch if needed, or rely on cmake defaults.
+        export CFLAGS="-fPIC"
+        export CXXFLAGS="-fPIC"
+        CMAKE_FLAGS="$CMAKE_FLAGS -DGGML_NATIVE=OFF"
+    fi
+    
     if command -v nvidia-smi &> /dev/null; then
         log "NVIDIA GPU detected. Enabling CUDA support."
-        MAKE_ARGS="GGML_CUDA=1"
+        CMAKE_FLAGS="$CMAKE_FLAGS -DGGML_CUDA=1"
     fi
 fi
 
 log "Building project..."
-if ! cmake -B build -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON $MAKE_ARGS; then
+
+# Checkout a known stable version before building to avoid recent breaking changes
+# We are currently inside $DIR_NAME
+git fetch --tags
+git checkout v1.7.0 || true
+
+# Patch the ggml-cpu specifically for fp16 neon errors if the path exists
+sed -i 's/#if defined(__ARM_NEON)/#if 0 \/\/ defined(__ARM_NEON)/g' "ggml/src/ggml-cpu/vec.cpp" 2>/dev/null || true
+sed -i 's/#if defined(__ARM_NEON)/#if 0 \/\/ defined(__ARM_NEON)/g' "ggml/src/ggml-cpu/ops.cpp" 2>/dev/null || true
+sed -i 's/#if defined(__ARM_NEON)/#if 0 \/\/ defined(__ARM_NEON)/g' "ggml/src/ggml-cpu/repack.cpp" 2>/dev/null || true
+sed -i 's/#if defined(__ARM_NEON)/#if 0 \/\/ defined(__ARM_NEON)/g' "ggml/src/ggml-cpu/simd-mappings.h" 2>/dev/null || true
+
+if ! cmake -S . -B build $CMAKE_FLAGS; then
     error "CMake configuration failed."
 fi
 

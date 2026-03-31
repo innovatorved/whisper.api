@@ -14,10 +14,6 @@ Thank you for considering contributing to NextTalk frontend! We welcome all cont
 
 To get started, follow the steps outlined in the installation section of the README file.
 
-## Code of Conduct
-
-Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
-
 ## How to report a bug
 
 If you find a bug, please raise an issue with the following details:

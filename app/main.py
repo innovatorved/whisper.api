@@ -1,22 +1,41 @@
+"""
+Whisper Speech-to-Text API
+
+A self-hosted speech-to-text API powered by whisper.cpp.
+"""
+
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
-
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.api import api_router
 from app.core.config import settings
 from app.core.errors import error_handler
-from app.api.models.ping import PingResponse
-
 from app.utils import print_routes
 from app.utils.checks import run_checks
+
+# Configure logging to show all info messages in the console
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:     %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 if not run_checks():
     raise Exception("Failed to pass all checks")
 
 
 app = FastAPI(
-    title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    title="Whisper Speech-to-Text API",
+    description=(
+        "A self-hosted speech-to-text API powered by whisper.cpp. "
+        "Supports pre-recorded audio transcription and live streaming via WebSocket."
+    ),
+    version="2.0.0",
+    openapi_url="/v1/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Set all CORS enabled origins
@@ -35,15 +54,16 @@ async def redirect_to_docs():
     return RedirectResponse(url="/docs")
 
 
-@app.get("/ping", tags=["ping"], response_model=PingResponse)
+@app.get("/ping", tags=["health"])
 async def ping():
-    return {"ping": "pong"}
+    """Health check endpoint."""
+    return {"ping": "pong", "status": "healthy"}
 
 
-# Include routers
-app.include_router(api_router, prefix=settings.API_V1_STR)
+# Include routers under /v1
+app.include_router(api_router, prefix="/v1")
 
-# # Error handlers
+# Error handlers
 app.add_exception_handler(500, error_handler)
 
 # Print all routes

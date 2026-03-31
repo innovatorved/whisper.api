@@ -1,14 +1,14 @@
-__pycache__/  
-*.pyc  
-*.pyo  
-*.egg-info/  
-dist/  
-build/  
-.env  
-.idea/  
-.vscode/  
-*.log  
-*.swp  
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.env
+.idea/
+.vscode/
+*.log
+*.swp
 .DS_Store
 /*/*.bin
 */*.bin
@@ -16,6 +16,10 @@ build/
 */*.wav
 */*.mp3
 */*.txt
+*/*.srt
+*/*.json
+
+.cachebust
 
 log.txt
 /binary/
@@ -27,6 +31,9 @@ whisper_temp_build/
 test.wav
 test.txt
 test_output*
+token.txt
 
+# Database
+*.db
 binary/
 models/

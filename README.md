@@ -8,138 +8,92 @@ app_file: Dockerfile
 app_port: 7860
 ---
 
-## Whisper API - Speech to Text Transcription
+# Whisper API 🎙️
 
-This open source project provides a self-hostable API for speech to text transcription using a finetuned Whisper ASR model. The API allows you to easily convert audio files to text through HTTP requests. Ideal for adding speech recognition capabilities to your applications.
+An open-source, high-performance, self-hosted API for speech-to-text transcription powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp).
 
-Key features:
+This project provides a **Deepgram-compatible** interface (REST & WebSocket), making it easy to integrate into existing workflows while maintaining full data ownership.
 
-- Uses a finetuned Whisper model for accurate speech recognition
-- Simple HTTP API for audio file transcription
-- User level access with API keys for managing usage
-- Self-hostable code for your own speech transcription service
-- Quantized model optimization for fast and efficient inference
-- **Asynchronous Processing**: Non-blocking transcription for high availability
-- **Concurrency Control**: Built-in request queuing to prevent server overload
-- Open source implementation for customization and transparency
+---
 
-This repository contains code to deploy the API server along with finetuning and quantizing models. Check out the documentation for getting started!
+## Key Features
 
-## Installation
+- **Standardized API**: Drop-in compatible with `/v1/listen` endpoints.
+- **Advanced Transcription**: Custom vocabulary (prompting), audio cropping (`start`/`duration`), and speaker diarization.
+- **Flexible Formats**: Native support for **JSON**, **SRT**, and **VTT** exports.
+- **Live Streaming**: Real-time 16kHz PCM transcription via WebSockets.
+- **Offline Management**: Simple CLI for secure API key generation and model management.
 
-To install the necessary dependencies and setup the Whisper binary, follow these steps:
+---
 
-### 1. System Dependencies
-Install `ffmpeg` for audio processing and build tools (`make`, `cmake`, `g++`) for compiling Whisper.
+## 📚 Documentation
 
-```bash
-# Ubuntu/Debian
-sudo apt install ffmpeg git make cmake g++
+For detailed guides, please refer to the documentation in the `docs/` folder:
 
-# macOS
-brew install ffmpeg cmake
-```
+- **[Getting Started](./docs/getting-started.md)**: Installation, prerequisites, and server setup.
+- **[Authentication](./docs/authentication.md)**: Managing API keys via the `manage_keys.py` CLI.
+- **[API Reference](./docs/api-reference.md)**: Detailed REST endpoint parameters and schemas.
+- **[Code Examples](./docs/code-examples.md)**: Production-ready snippets for Python, JS, and cURL.
+- **[Live Streaming](./docs/streaming.md)**: WebSocket protocol and data format specifications.
+- **[Models](./docs/models.md)**: How to manage and add `ggml` models.
 
-### 2. Python Dependencies
-Install the required Python packages.
+---
 
+## 🛠️ Quick Start
+
+### 1. Installation
 ```bash
 pip install -r requirements.txt
-```
-
-### 3. Setup Environment
-Copy the example environment file and configure it:
-
-```bash
 cp .env.example .env
-# Edit .env with your database credentials and settings
-# Optional: Set MAX_CONCURRENT_TRANSCRIPTIONS (default: 2) in .env to control parallel jobs
-```
-
-### 4. Setup Whisper
-Run the setup script to clone, build, and configure the Whisper binary.
-
-```bash
 chmod +x setup_whisper.sh
 ./setup_whisper.sh
 ```
 
-## Running the Project
-
-### Run Locally (without Docker)
-To run the project locally (e.g., inside a Conda environment or virtualenv):
-
+### 2. Setup Database & Keys
 ```bash
-# Ensure your environment is active (e.g., conda activate whisper-api)
-uvicorn app.main:app --host 0.0.0.0 --port 7860 --reload
+python -m app.cli init
+python -m app.cli create --name "MyAdminKey"
 ```
 
-### Docker (Production)
-To run the project using Docker:
+*Note: For testing purposes, you can enable a public token generation endpoint in the Swagger UI (`/docs`) by setting `ENABLE_TEST_TOKEN_ENDPOINT=true` in your `.env` file.*
 
+### 3. Start the Server
 ```bash
-# Build the image
-docker build -t whisper-api .
-
-# Run the container (ensure env vars are passed or secrets used)
-# For local testing with .env file:
-docker run --env-file .env -p 7860:7860 whisper-api
+uvicorn app.main:app --host 0.0.0.0 --port 7860
 ```
 
-## Get Your token
-To get your token, use the following command:
-
+### 4. Transcribe a File (cURL)
 ```bash
-curl -X 'POST' \
-  'http://localhost:8000/api/v1/users/get_token' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "email": "example@domain.com",
-  "password": "password"
-}'
+curl -X POST 'http://localhost:7860/v1/listen' \
+  -H "Authorization: Token <YOUR_KEY>" \
+  -H "Content-Type: audio/wav" \
+  --data-binary @audio.wav
 ```
 
-## Example to Transcribe a File
-To upload a file and transcribe it, use the following command:
-Note: The token is a dummy token and will not work. Please use the token provided by the admin.
-
-Here are the available models:
-- tiny.en
-- tiny.en.q5
-- base.en.q5
-
+### 5. Transcribe from URL (cURL)
 ```bash
-
-# Modify the token and audioFilePath
-curl -X 'POST' \
-  'http://localhost:8000/api/v1/transcribe/?model=tiny.en.q5' \
-  -H 'accept: application/json' \
-  -H 'Authentication: e9b7658aa93342c492fa64153849c68b8md9uBmaqCwKq4VcgkuBD0G54FmsE8JT' \
-  -H 'Content-Type: multipart/form-data' \
-  -F 'file=@audioFilePath.wav;type=audio/wav'
+curl -X POST 'http://localhost:7860/v1/listen' \
+  -H "Authorization: Token <YOUR_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/audio.mp3"}'
 ```
 
-## License
+### 6. Export Subtitles (cURL)
+```bash
+curl -X POST 'http://localhost:7860/v1/listen?response_format=srt' \
+  -H "Authorization: Token <YOUR_KEY>" \
+  -H "Content-Type: audio/wav" \
+  --data-binary @audio.wav > output.srt
+```
 
-[MIT](https://choosealicense.com/licenses/mit/)
 
+---
 
-## Reference & Credits
+## 📄 License & References
 
-- [https://github.com/openai/whisper](https://github.com/openai/whisper)
-- [https://openai.com/blog/whisper/](https://openai.com/blog/whisper/)
-- [https://github.com/ggerganov/whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+[MIT License](https://choosealicense.com/licenses/mit/)
 
-  
-## Authors
+- [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+- [OpenAI Whisper](https://github.com/openai/whisper)
 
-- [Ved Gupta](https://www.github.com/innovatorved)
-
-  
-## 🚀 About Me
-Just try to be a developer!
-  
-## Support
-
-For support, email vedgupta@protonmail.com
+**Author:** [Ved Gupta](https://www.github.com/innovatorved)
