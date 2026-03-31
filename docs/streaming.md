@@ -11,6 +11,12 @@ The Whisper API supports real-time, low-latency transcription via WebSockets.
 - `token`: **Required** API Key.
 - `model`: Model to use (`tiny.en`, `base.en`, etc.).
 - `language`: Transcription language (`en`, `es`, `fr`, etc.).
+- `encoding`: Optional stream encoding. Default `linear16`.
+- `sample_rate`: Optional PCM sample rate. Default `16000`.
+
+`encoding` supports: `linear16`, `pcm16`, `wav`, `webm`, `ogg`, `opus`, `mp3`, `flac`, `mp4`, `m4a`, `auto`.
+
+For browser clients using MediaRecorder/Deepgram SDK, use `encoding=auto` (or explicit `webm`/`ogg`) so the server decodes compressed chunks before transcription.
 
 ### Example Connection (using `wscat`)
 ```bash
@@ -19,9 +25,11 @@ wscat -c "ws://localhost:7860/v1/listen?token=YOUR_API_KEY&model=tiny.en&languag
 
 ## Sending Data
 
-Clients should send **raw PCM binary bytes** to the server.
+Clients can send either:
+- **Raw PCM binary bytes** (`encoding=linear16` or `pcm16`)
+- **Compressed/container bytes** (`encoding=auto`, `webm`, `ogg`, etc.)
 
-### Format Specifications:
+### PCM Format Specifications (`encoding=linear16`)
 - **Sample Rate**: 16,000 Hz
 - **Bit Depth**: 16-bit
 - **Channels**: 1 (Mono)

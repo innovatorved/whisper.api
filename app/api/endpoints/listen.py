@@ -69,6 +69,27 @@ router = APIRouter()
 # Semaphore to limit concurrent transcriptions
 _transcription_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_TRANSCRIPTIONS)
 
+PCM_STREAM_ENCODINGS = {
+    "linear16",
+    "pcm",
+    "pcm16",
+    "pcm_s16le",
+    "raw",
+    "raw-pcm",
+    "s16le",
+}
+
+STREAM_CONTAINER_ENCODINGS = {
+    "wav": "wav",
+    "webm": "webm",
+    "ogg": "ogg",
+    "opus": "opus",
+    "mp3": "mp3",
+    "flac": "flac",
+    "mp4": "mp4",
+    "m4a": "m4a",
+}
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # AUTH HELPER
@@ -105,6 +126,110 @@ def extract_api_key(
         )
         
     return token
+
+
+def extract_ws_api_key(websocket: WebSocket, query_token: Optional[str]) -> Optional[str]:
+    """Extract API key from websocket query params, auth header, or subprotocol header."""
+    if query_token:
+        return query_token.strip()
+
+    auth_header = websocket.headers.get("authorization")
+    if auth_header:
+        parts = auth_header.split(" ", 1)
+        if len(parts) == 2 and parts[0].lower() in {"token", "bearer"}:
+            token = parts[1].strip()
+            if token:
+                return token
+
+    # Browser clients often send API keys in subprotocols,
+    # e.g. "token, <api_key>" and may include extra protocol pairs.
+    subprotocol_header = websocket.headers.get("sec-websocket-protocol", "")
+    if subprotocol_header:
+        protocols = [p.strip() for p in subprotocol_header.split(",") if p.strip()]
+        # Parse as key/value pairs and locate token-like keys anywhere in the list.
+        i = 0
+        while i + 1 < len(protocols):
+            key = protocols[i].lower()
+            value = protocols[i + 1].strip()
+            if key in {"token", "bearer", "authorization"} and value:
+                value_parts = value.split(" ", 1)
+                if len(value_parts) == 2 and value_parts[0].lower() in {"token", "bearer"}:
+                    value = value_parts[1].strip()
+                if value:
+                    return value
+            i += 2
+
+        # Fallback for malformed headers where token is followed by immediate value.
+        for idx, value in enumerate(protocols[:-1]):
+            if value.lower() in {"token", "bearer"}:
+                return protocols[idx + 1].strip()
+
+    return None
+
+
+def select_ws_subprotocol(websocket: WebSocket) -> Optional[str]:
+    """Select a safe subprotocol from what the client offered.
+
+    Some browser clients close the socket if they offered subprotocols and the
+    server does not select one. Prefer non-secret protocol keys when present.
+    """
+    subprotocol_header = websocket.headers.get("sec-websocket-protocol", "")
+    if not subprotocol_header:
+        return None
+
+    offered = [p.strip() for p in subprotocol_header.split(",") if p.strip()]
+    if not offered:
+        return None
+
+    preferred = {"token", "bearer", "authorization", "x-deepgram-session-id"}
+    for protocol in offered:
+        if protocol.lower() in preferred:
+            return protocol
+
+    # Fallback to first offered value to satisfy protocol negotiation.
+    return offered[0]
+
+
+def detect_stream_chunk_format(audio_data: bytes) -> Optional[str]:
+    """Best-effort container/codec detection for websocket binary chunks."""
+    if len(audio_data) < 4:
+        return None
+
+    if audio_data.startswith(b"RIFF") and len(audio_data) >= 12 and audio_data[8:12] == b"WAVE":
+        return "wav"
+    if audio_data.startswith(b"OggS"):
+        return "ogg"
+    if audio_data.startswith(b"fLaC"):
+        return "flac"
+    if audio_data.startswith(b"ID3"):
+        return "mp3"
+    if audio_data.startswith(b"\x1A\x45\xDF\xA3"):
+        return "webm"
+    if len(audio_data) >= 12 and audio_data[4:8] == b"ftyp":
+        return "mp4"
+    if audio_data.startswith(b"OpusHead"):
+        return "opus"
+
+    # MP3 frame sync (11111111 111xxxxx)
+    if audio_data[0] == 0xFF and (audio_data[1] & 0xE0) == 0xE0:
+        return "mp3"
+
+    return None
+
+
+def resolve_stream_encoding(
+    requested_encoding: str,
+    detected_encoding: Optional[str],
+) -> str:
+    """Resolve stream encoding, preferring explicit client intent over auto-detection."""
+    normalized = (requested_encoding or "linear16").strip().lower()
+    if normalized == "auto":
+        if detected_encoding:
+            return detected_encoding
+        return "linear16"
+    if normalized in PCM_STREAM_ENCODINGS and detected_encoding in STREAM_CONTAINER_ENCODINGS:
+        return detected_encoding
+    return normalized
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -284,6 +409,8 @@ async def listen_streaming(
     diarize: bool = Query(False),
     detect_language: bool = Query(False),
     utterances: bool = Query(False),
+    encoding: str = Query("linear16"),
+    sample_rate: int = Query(STREAM_SAMPLE_RATE),
     # Optional token query param
     token: Optional[str] = Query(None),
     db: Session = Depends(get_db)
@@ -294,16 +421,8 @@ async def listen_streaming(
     Buffers incoming PCM audio data (16kHz, 16-bit, mono) and transcribes
     in chunks using whisper-cli. Returns Deepgram-compatible streaming results.
     """
-    # 1. Extract token from Query or Headers
-    auth_token = token
-    if not auth_token:
-        # Check Authorization header (Deepgram SDK style)
-        auth_header = websocket.headers.get("authorization")
-        if auth_header and auth_header.lower().startswith("token "):
-            auth_token = auth_header.split(" ", 1)[1].strip()
-        elif auth_header and auth_header.lower().startswith("bearer "):
-            # Supporting Bearer for compatibility
-            auth_token = auth_header.split(" ", 1)[1].strip()
+    # 1. Extract token from Query, Authorization header, or subprotocols
+    auth_token = extract_ws_api_key(websocket, token)
 
     if not auth_token:
         await websocket.close(
@@ -318,9 +437,27 @@ async def listen_streaming(
         await websocket.close(code=4001, reason="Invalid or revoked API key")
         return
 
-    await websocket.accept()
+    accepted_subprotocol = select_ws_subprotocol(websocket)
+    await websocket.accept(subprotocol=accepted_subprotocol)
+    if accepted_subprotocol:
+        logger.info(f"[WS] Negotiated subprotocol: {accepted_subprotocol}")
 
     request_id = str(uuid.uuid4())
+    requested_encoding = (encoding or "linear16").strip().lower()
+    if requested_encoding != "auto" and requested_encoding not in PCM_STREAM_ENCODINGS and requested_encoding not in STREAM_CONTAINER_ENCODINGS:
+        await websocket.close(
+            code=4002,
+            reason=(
+                "Unsupported stream encoding. Use one of: "
+                "linear16, pcm16, wav, webm, ogg, opus, mp3, flac, mp4, m4a, auto"
+            ),
+        )
+        return
+
+    if sample_rate <= 0:
+        await websocket.close(code=4002, reason="sample_rate must be a positive integer")
+        return
+
     audio_buffer = bytearray()
     chunk_start_time = 0.0
     total_duration = 0.0
@@ -333,7 +470,7 @@ async def listen_streaming(
     logger.info(
         f"[WS:{request_id}] Session started. "
         f"model={model}, buffer_threshold={buffer_threshold} bytes ({chunk_duration_s}s), "
-        f"min_audio={MIN_AUDIO_BYTES} bytes"
+        f"min_audio={MIN_AUDIO_BYTES} bytes, encoding={requested_encoding}, sample_rate={sample_rate}"
     )
 
     # 3. Send initial metadata (Deepgram SDK expects this on connect)
@@ -378,18 +515,19 @@ async def listen_streaming(
                     if msg_type == "CloseStream":
                         logger.info(f"[WS:{request_id}] CloseStream received. Buffer: {len(audio_buffer)} bytes")
                         # Process any remaining buffer before closing
-                        if len(audio_buffer) >= MIN_AUDIO_BYTES:
+                        if len(audio_buffer) > 0:
                             result = await _process_stream_chunk_safe(
-                                audio_buffer, request_id, model, language,
+                                bytes(audio_buffer), request_id, model, language,
                                 translate, diarize, detect_language,
-                                chunk_start_time, is_final=True, speech_final=True,
+                                chunk_start_time, requested_encoding, sample_rate,
+                                is_final=True, speech_final=True,
                             )
                             await websocket.send_json(result)
                             chunks_processed += 1
                         else:
                             logger.info(
                                 f"[WS:{request_id}] Remaining buffer too small "
-                                f"({len(audio_buffer)} < {MIN_AUDIO_BYTES} bytes), skipping"
+                                f"({len(audio_buffer)} bytes), skipping"
                             )
                         break
 
@@ -429,10 +567,11 @@ async def listen_streaming(
                     result = await _process_stream_chunk_safe(
                         chunk_data, request_id, model, language,
                         translate, diarize, detect_language,
-                        chunk_start_time, is_final=True, speech_final=False,
+                        chunk_start_time, requested_encoding, sample_rate,
+                        is_final=True, speech_final=False,
                     )
 
-                    chunk_duration = len(chunk_data) / (STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH)
+                    chunk_duration = float(result.get("duration", 0.0))
                     chunk_start_time += chunk_duration
                     total_duration += chunk_duration
                     chunks_processed += 1
@@ -491,6 +630,8 @@ async def _process_stream_chunk_safe(
     diarize: bool,
     detect_language: bool,
     start_time: float,
+    requested_encoding: str,
+    sample_rate: int,
     is_final: bool = True,
     speech_final: bool = False,
 ) -> dict:
@@ -500,21 +641,48 @@ async def _process_stream_chunk_safe(
     This is a 'safe' wrapper that never raises — errors are returned as part of
     the result dict so the WebSocket handler can forward them to the client.
     """
-    duration = len(audio_data) / (STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH)
+    duration = 0.0
     wav_path = None
+    source_path = None
 
     try:
-        # Validate minimum audio size
-        if len(audio_data) < MIN_AUDIO_BYTES:
-            logger.warning(
-                f"[WS:{request_id}] Audio chunk too short ({len(audio_data)} bytes, "
-                f"need {MIN_AUDIO_BYTES}). Returning empty result."
-            )
-            return _empty_streaming_result(request_id, model, start_time, duration, is_final, speech_final)
+        detected_format = detect_stream_chunk_format(audio_data)
+        resolved_encoding = resolve_stream_encoding(requested_encoding, detected_format)
 
-        # Save PCM data as WAV
-        wav_path = create_wav_from_pcm(audio_data)
-        logger.info(f"[WS:{request_id}] Created temp WAV: {wav_path} ({os.path.getsize(wav_path)} bytes)")
+        if resolved_encoding in PCM_STREAM_ENCODINGS:
+            min_pcm_bytes = int(sample_rate * STREAM_SAMPLE_WIDTH * STREAM_CHANNELS * 0.5)
+            duration = len(audio_data) / max(sample_rate * STREAM_SAMPLE_WIDTH * STREAM_CHANNELS, 1)
+
+            if len(audio_data) < min_pcm_bytes:
+                logger.warning(
+                    f"[WS:{request_id}] PCM chunk too short ({len(audio_data)} bytes, "
+                    f"need {min_pcm_bytes}). Returning empty result."
+                )
+                return _empty_streaming_result(request_id, model, start_time, duration, is_final, speech_final)
+
+            wav_path = create_wav_from_pcm(audio_data, sample_rate=sample_rate)
+            logger.info(
+                f"[WS:{request_id}] Created PCM WAV: {wav_path} "
+                f"({os.path.getsize(wav_path)} bytes, sample_rate={sample_rate})"
+            )
+        else:
+            extension = STREAM_CONTAINER_ENCODINGS.get(resolved_encoding)
+            if not extension:
+                raise ValueError(f"Unsupported resolved encoding: {resolved_encoding}")
+
+            source_path = save_audio_bytes(audio_data, extension=extension)
+            wav_path = await convert_audio_to_wav(source_path)
+            duration = get_audio_duration(wav_path)
+            logger.info(
+                f"[WS:{request_id}] Decoded {resolved_encoding} chunk via ffmpeg "
+                f"to WAV: {wav_path} ({duration:.2f}s)"
+            )
+
+            if duration < 0.5:
+                logger.warning(
+                    f"[WS:{request_id}] Decoded chunk too short ({duration:.2f}s). Returning empty result."
+                )
+                return _empty_streaming_result(request_id, model, start_time, duration, is_final, speech_final)
 
         # Run whisper-cli
         async with _transcription_semaphore:
@@ -573,6 +741,11 @@ async def _process_stream_chunk_safe(
         if wav_path and os.path.exists(wav_path):
             try:
                 os.remove(wav_path)
+            except OSError:
+                pass
+        if source_path and os.path.exists(source_path):
+            try:
+                os.remove(source_path)
             except OSError:
                 pass
 

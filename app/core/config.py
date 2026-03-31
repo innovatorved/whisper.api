@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from typing import Any, Dict, List, Optional, Union
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import AnyHttpUrl, AnyUrl, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -35,11 +35,15 @@ class Settings(BaseSettings):
     TEST_DATABASE_URL: str = env.get("TEST_DATABASE_URL", "sqlite:///./test.db")
 
     # ── CORS ───────────────────────────────────────────────────────
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
+    BACKEND_CORS_ORIGINS: List[Union[AnyHttpUrl, AnyUrl]] = [
         "http://localhost:3000",
         "http://localhost:8080",
         "http://localhost:8000",
         "http://localhost:7860",
+        "ws://localhost:3000",
+        "ws://localhost:8080",
+        "ws://localhost:8000",
+        "ws://localhost:7860",
     ]
 
     # ── Transcription ──────────────────────────────────────────────
@@ -68,6 +72,18 @@ class Settings(BaseSettings):
     ) -> str:
         if not v:
             raise ValueError("DATABASE_URL must be set")
+        return v
+
+    @field_validator("BACKEND_CORS_ORIGINS")
+    def cors_origins_must_use_valid_scheme(
+        cls, v: List[Union[AnyHttpUrl, AnyUrl]]
+    ) -> List[Union[AnyHttpUrl, AnyUrl]]:
+        allowed_schemes = {"http", "https", "ws", "wss"}
+        for origin in v:
+            if origin.scheme not in allowed_schemes:
+                raise ValueError(
+                    "BACKEND_CORS_ORIGINS must use one of: http, https, ws, wss"
+                )
         return v
 
 
