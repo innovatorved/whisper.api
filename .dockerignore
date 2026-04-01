@@ -8,7 +8,7 @@ __pycache__
 *.pyo
 *.pyd
 .db
-whisper.db
+!whisper.db
 test.db
 *.log
 docs/
