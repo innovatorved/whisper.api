@@ -164,7 +164,7 @@ export default function Home() {
       });
 
       const connection = await client.listen.v1.connect({
-        model: "base.en.q5",
+        model: "tiny.en",
         language: "en",
         smart_format: "true",
         interim_results: "true",
