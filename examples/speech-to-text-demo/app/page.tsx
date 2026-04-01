@@ -3,8 +3,8 @@
 import { DeepgramClient } from "@deepgram/sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const DEEPGRAM_API_KEY = "e66ea978a08e416fa41abf6e4e7ab720c7rxmxws7i8CUccI9WJtTXORzSpXNX0K";
-const DEEPGRAM_BASE_URL = "http://localhost:7860";
+const DEEPGRAM_API_KEY = "a078f4b3560745a7a52b8335cad94c25bYNNABFswluovMP94prkwrW2ji6hQ3eo";
+const DEEPGRAM_BASE_URL = "https://innovatorved-whisper-api.hf.space";
 
 type LiveResultMessage = {
   type: "Results";

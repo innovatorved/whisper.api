@@ -40,6 +40,7 @@ class Settings(BaseSettings):
         "http://localhost:8080",
         "http://localhost:8000",
         "http://localhost:7860",
+        "https://whisper.vedgupta.in",
         "ws://localhost:3000",
         "ws://localhost:8080",
         "ws://localhost:8000",
