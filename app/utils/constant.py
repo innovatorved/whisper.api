@@ -14,9 +14,9 @@ model_names = {
 # ─── Model Download URLs ─────────────────────────────────────────────
 
 model_urls = {
-    "tiny.en": "https://firebasestorage.googleapis.com/v0/b/model-innovatorved.appspot.com/o/ggml-model-whisper-base.en-q5_1.bin?alt=media",
-    "tiny.en.q5": "https://firebasestorage.googleapis.com/v0/b/model-innovatorved.appspot.com/o/ggml-model-whisper-tiny.en-q5_1.bin?alt=media",
-    "base.en.q5": "https://firebasestorage.googleapis.com/v0/b/model-innovatorved.appspot.com/o/ggml-model-whisper-base.en-q5_1.bin?alt=media",
+    "tiny.en": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin",
+    "tiny.en.q5": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin",
+    "base.en.q5": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_1.bin",
 }
 
 # ─── Model Metadata (for GET /v1/models and response metadata) ───────
