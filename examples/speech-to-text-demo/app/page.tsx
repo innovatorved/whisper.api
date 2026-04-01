@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const DEEPGRAM_API_KEY = "1385e21ace3042039c2c0c5fbaab0889hpfutVp9wlJ9unWqOj4W99yr0JTpARfx";
 const DEEPGRAM_BASE_URL = "https://innovatorved-whisper-api.hf.space";
+const GITHUB_REPO_URL = "https://github.com/innovatorved/whisper.api";
 
 type LiveResultMessage = {
   type: "Results";
@@ -281,6 +282,22 @@ export default function Home() {
             </div>
 
             <div className="flex shrink-0 flex-col items-start gap-3 md:items-end">
+              <a
+                href={GITHUB_REPO_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-[#ffd7ba] bg-[#fff7ec] px-4 py-2 text-sm font-semibold text-[#6f4a36] transition hover:-translate-y-0.5 hover:border-[#ffc59a]"
+                aria-label="Open whisper.api GitHub repository in a new tab"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 fill-current"
+                >
+                  <path d="M12 1.5a10.5 10.5 0 0 0-3.32 20.47c.53.1.72-.23.72-.5v-1.96c-2.95.64-3.58-1.25-3.58-1.25-.48-1.2-1.16-1.52-1.16-1.52-.95-.65.08-.64.08-.64 1.05.08 1.6 1.08 1.6 1.08.93 1.6 2.44 1.13 3.03.86.09-.67.36-1.13.66-1.39-2.35-.27-4.82-1.18-4.82-5.26 0-1.16.41-2.1 1.08-2.84-.11-.27-.47-1.37.1-2.84 0 0 .88-.28 2.88 1.08a9.96 9.96 0 0 1 5.24 0c2-1.36 2.88-1.08 2.88-1.08.57 1.47.21 2.57.1 2.84.67.74 1.08 1.68 1.08 2.84 0 4.1-2.48 4.98-4.84 5.24.37.32.7.95.7 1.92v2.84c0 .28.2.6.73.5A10.5 10.5 0 0 0 12 1.5Z" />
+                </svg>
+              </a>
+
               <button
                 type="button"
                 className={`inline-flex items-center gap-3 rounded-full bg-gradient-to-br from-[#ff5a1f] to-[#ff2f84] px-6 py-4 text-[15px] font-semibold text-[#fff9f5] shadow-[0_10px_18px_rgba(164,55,27,0.28)] transition hover:-translate-y-0.5 hover:scale-[1.015] ${isListening ? "animate-pulse" : ""}`}
