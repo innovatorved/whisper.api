@@ -1,0 +1,215 @@
+---
+title: REST API Reference
+description: Complete reference for the Whisper API REST endpoints — parameters, request formats, response schemas, and error codes.
+---
+
+
+The Whisper API provides a **Deepgram-compatible** REST interface for pre-recorded audio transcription and model management.
+
+---
+
+## Endpoints Overview
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| <span class="badge badge-post">POST</span> | `/v1/listen` | Transcribe audio (file upload or URL) |
+| <span class="badge badge-get">GET</span> | `/v1/models` | List available models |
+| <span class="badge badge-get">GET</span> | `/ping` | Health check |
+| <span class="badge badge-post">POST</span> | `/v1/auth/test-token` | Generate test token (dev only) |
+| <span class="badge badge-ws">WS</span> | `/v1/listen` | Live streaming (see [Streaming docs](/streaming/)) |
+
+---
+
+## POST `/v1/listen` — Transcribe Audio
+
+The primary transcription endpoint. Accepts audio either as a binary file upload or as a URL in a JSON body.
+
+### Request Parameters (Query String)
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `model` | `string` | `tiny.en` | Model to use. See `GET /v1/models` for options. |
+| `language` | `string` | `en` | BCP-47 language code for transcription. |
+| `prompt` | `string` | `null` | Context/vocabulary prompt to guide the model (e.g., `"TURNIPS, MUTTON"`). |
+| `start` | `integer` | `0` | Offset in **milliseconds** — skip audio before this point. |
+| `duration` | `integer` | `null` | Maximum duration in **milliseconds** to process. |
+| `response_format` | `string` | `json` | Response format: `json`, `srt`, or `vtt`. |
+| `diarize` | `boolean` | `false` | Enable speaker separation (best with stereo audio). |
+| `utterances` | `boolean` | `false` | Return speech interval metadata. |
+
+### Request Headers
+
+| Header | Value | Required |
+|--------|-------|----------|
+| `Authorization` | `Token <your_api_key>` | Yes |
+| `Content-Type` | `audio/wav`, `audio/mpeg`, `audio/mp4`, etc. | For file upload |
+| `Content-Type` | `application/json` | For URL-based transcription |
+
+---
+
+### File Upload
+
+Send raw audio bytes as the request body:
+
+```bash
+curl -X POST 'http://localhost:7860/v1/listen?model=tiny.en&language=en' \
+  -H "Authorization: Token YOUR_API_KEY" \
+  -H "Content-Type: audio/wav" \
+  --data-binary @audio.wav
+```
+
+### URL-Based Transcription
+
+Send a JSON body with the audio file URL:
+
+```bash
+curl -X POST 'http://localhost:7860/v1/listen?model=tiny.en' \
+  -H "Authorization: Token YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/audio.mp3"}'
+```
+
+---
+
+### JSON Response Schema
+
+When `response_format=json` (default), the response follows the Deepgram format:
+
+```json
+{
+  "metadata": {
+    "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "created": "2026-03-29T10:30:00.000000Z",
+    "duration": 10.43,
+    "channels": 1,
+    "sha256": "abc123def456..."
+  },
+  "results": {
+    "channels": [
+      {
+        "alternatives": [
+          {
+            "transcript": "And so my fellow Americans ask not what your country can do for you ask what you can do for your country",
+            "confidence": 0.98,
+            "words": [
+              {
+                "word": "and",
+                "start": 0.0,
+                "end": 0.32,
+                "confidence": 0.97
+              },
+              {
+                "word": "so",
+                "start": 0.32,
+                "end": 0.56,
+                "confidence": 0.99
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### SRT Response
+
+When `response_format=srt`, raw subtitle text is returned:
+
+```txt
+1
+00:00:00,000 --> 00:00:03,200
+And so my fellow Americans
+
+2
+00:00:03,200 --> 00:00:06,800
+ask not what your country can do for you
+
+3
+00:00:06,800 --> 00:00:10,430
+ask what you can do for your country
+```
+
+### VTT Response
+
+When `response_format=vtt`:
+
+```txt
+WEBVTT
+
+00:00:00.000 --> 00:00:03.200
+And so my fellow Americans
+
+00:00:03.200 --> 00:00:06.800
+ask not what your country can do for you
+
+00:00:06.800 --> 00:00:10.430
+ask what you can do for your country
+```
+
+---
+
+## GET `/v1/models` — List Models
+
+Returns all `.bin` model files available in the `models/` directory.
+
+```bash
+curl -X GET 'http://localhost:7860/v1/models' \
+  -H "Authorization: Token YOUR_API_KEY"
+```
+
+**Response:**
+
+```json
+{
+  "models": [
+    "tiny.en",
+    "base.en",
+    "small.en"
+  ]
+}
+```
+
+---
+
+## GET `/ping` — Health Check
+
+A simple health check endpoint (no authentication required):
+
+```bash
+curl http://localhost:7860/ping
+```
+
+```json
+{
+  "ping": "pong",
+  "status": "healthy"
+}
+```
+
+---
+
+## Error Responses
+
+| Status Code | Description |
+|-------------|-------------|
+| `400` | Bad request — invalid parameters or unsupported format |
+| `401` | Unauthorized — missing or invalid API key |
+| `413` | Payload too large — audio file exceeds size limit |
+| `415` | Unsupported media type — unrecognized content type |
+| `422` | Validation error — malformed request body |
+| `500` | Internal server error — transcription engine failure |
+| `503` | Service unavailable — max concurrent transcriptions reached |
+
+### Error Response Format
+
+```json
+{
+  "detail": "Invalid or missing API key"
+}
+```
+
+<Aside type="tip">
+  The interactive Swagger UI at `http://localhost:7860/docs` lets you test all endpoints directly in your browser with auto-generated forms and response viewers.
+</Aside>

@@ -1,0 +1,57 @@
+---
+import { getCollection, render } from "astro:content";
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import { sortDocs, toNavItems } from "../../lib/navigation";
+
+import Card from "../../components/mdx/Card.astro";
+import CardGrid from "../../components/mdx/CardGrid.astro";
+import LinkCard from "../../components/mdx/LinkCard.astro";
+import Steps from "../../components/mdx/Steps.astro";
+import Tabs from "../../components/mdx/Tabs.astro";
+import TabItem from "../../components/mdx/TabItem.astro";
+import Aside from "../../components/mdx/Aside.astro";
+
+type SearchItem = {
+  title: string;
+  description?: string;
+  slug: string;
+  href: string;
+};
+
+export async function getStaticPaths() {
+  const docs = sortDocs(await getCollection("docs"));
+  return docs.map((entry) => ({
+    params: { slug: entry.id === "index" ? undefined : entry.id },
+    props: { entry, docs }
+  }));
+}
+
+const { entry, docs } = Astro.props;
+const { Content, headings } = await render(entry);
+const navItems = toNavItems(docs);
+const currentSlug = entry.id === "index" ? "" : entry.id;
+const currentIndex = docs.findIndex((item) => item.id === entry.id);
+const prevEntry = currentIndex > 0 ? docs[currentIndex - 1] : undefined;
+const nextEntry = currentIndex >= 0 && currentIndex < docs.length - 1 ? docs[currentIndex + 1] : undefined;
+const prevItem = prevEntry ? { slug: prevEntry.id === "index" ? "" : prevEntry.id, title: prevEntry.data.title } : undefined;
+const nextItem = nextEntry ? { slug: nextEntry.id === "index" ? "" : nextEntry.id, title: nextEntry.data.title } : undefined;
+const searchItems: SearchItem[] = docs.map((item) => ({
+  title: item.data.title,
+  description: item.data.description,
+  slug: item.id,
+  href: item.id === "index" ? "/docs" : `/docs/${item.id}`
+}));
+---
+
+<DocsLayout
+  title={entry.data.title}
+  description={entry.data.description}
+  navItems={navItems}
+  currentSlug={currentSlug}
+  headings={headings}
+  prevItem={prevItem}
+  nextItem={nextItem}
+  searchItems={searchItems}
+>
+  <Content components={{ Card, CardGrid, LinkCard, Steps, Tabs, TabItem, Aside }} />
+</DocsLayout>

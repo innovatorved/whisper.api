@@ -18,8 +18,10 @@ build/
 */*.txt
 */*.srt
 */*.json
+!docs/package.json
 
 .cachebust
+.agents/
 
 log.txt
 /binary/
@@ -37,3 +39,8 @@ token.txt
 # *.db
 binary/
 models/
+
+# Docs site build artifacts
+docs/node_modules/
+docs/dist/
+docs/.astro/

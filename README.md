@@ -28,14 +28,22 @@ This project provides a **Deepgram-compatible** interface (REST & WebSocket), ma
 
 ## 📚 Documentation
 
-For detailed guides, please refer to the documentation in the `docs/` folder:
+Full documentation is available as a self-contained Astro Starlight site in the `docs/` directory. To run it locally:
 
-- **[Getting Started](./docs/getting-started.md)**: Installation, prerequisites, and server setup.
-- **[Authentication](./docs/authentication.md)**: Managing API keys via the `manage_keys.py` CLI.
-- **[API Reference](./docs/api-reference.md)**: Detailed REST endpoint parameters and schemas.
-- **[Code Examples](./docs/code-examples.md)**: Production-ready snippets for Python, JS, and cURL.
-- **[Live Streaming](./docs/streaming.md)**: WebSocket protocol and data format specifications.
-- **[Models](./docs/models.md)**: How to manage and add `ggml` models.
+```bash
+cd docs && npm install && npm run dev
+```
+
+The docs site covers:
+
+- **Getting Started** — Installation, prerequisites, environment variables, and server setup
+- **Authentication** — API key generation, management, and usage patterns
+- **REST API Reference** — Endpoint parameters, request/response schemas, and error codes
+- **Live Streaming** — WebSocket protocol, audio formats, and control messages
+- **Code Examples** — Production-ready snippets for cURL, Python, and JavaScript
+- **Models** — GGML model sizes, quantization formats, and download links
+- **Docker Deployment** — Dockerfile walkthrough and production checklist
+- **Contributing** — Development setup, PR workflow, and project structure
 
 ---
 

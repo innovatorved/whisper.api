@@ -1,0 +1,17 @@
+---
+interface Props {
+  type?: "tip" | "note" | "caution";
+}
+
+const { type = "note" } = Astro.props;
+
+const classes = {
+  tip: "border-green-200 bg-green-50",
+  note: "border-blue-200 bg-blue-50",
+  caution: "border-amber-200 bg-amber-50"
+}[type];
+---
+
+<aside class={`my-4 rounded-lg border p-4 text-sm text-gray-700 ${classes}`}>
+  <slot />
+</aside>

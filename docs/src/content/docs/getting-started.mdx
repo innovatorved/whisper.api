@@ -1,0 +1,182 @@
+---
+title: Installation & Setup
+description: Get Whisper API running locally in under 5 minutes — prerequisites, installation, database setup, and server launch.
+---
+
+
+This guide walks you through setting up the Whisper API from scratch on your local machine.
+
+## Prerequisites
+
+Before you begin, make sure you have the following installed:
+
+| Requirement | Version | Purpose |
+|-------------|---------|---------|
+| **Python** | 3.10+ | Runtime for the FastAPI server |
+| **pip** | Latest | Python package manager |
+| **FFmpeg** | Any | Audio transcoding to 16kHz WAV |
+| **Git** | Any | Clone the repository |
+| **CMake** | 3.14+ | Build whisper.cpp from source |
+| **C++ Compiler** | g++ or clang++ | Compile the whisper binary |
+
+<Aside type="tip">
+  On macOS, install prerequisites with: `brew install ffmpeg cmake`
+  
+  On Ubuntu/Debian: `sudo apt-get install ffmpeg cmake build-essential`
+</Aside>
+
+---
+
+## Installation
+
+<Steps>
+
+1. **Clone the Repository**
+
+   ```bash
+   git clone https://github.com/innovatorved/whisper.api.git
+   cd whisper.api
+   ```
+
+2. **Create a Virtual Environment** (recommended)
+
+   <Tabs>
+     <TabItem label="venv">
+     ```bash
+     python -m venv .venv
+     source .venv/bin/activate
+     ```
+     </TabItem>
+     <TabItem label="conda">
+     ```bash
+     conda create -n whisper python=3.10
+     conda activate whisper
+     ```
+     </TabItem>
+   </Tabs>
+
+3. **Install Python Dependencies**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configure Environment Variables**
+
+   Copy the example file and customize:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Key variables:
+
+   ```ini
+   # Security — change this in production!
+   SECRET_KEY=your-secret-key-here
+
+   # Server
+   SERVER_HOST=http://localhost:7860
+
+   # Database
+   DATABASE_URL=sqlite:///./whisper.db
+
+   # Whisper binary & models
+   WHISPER_BINARY_PATH=./binary/whisper-cli
+   MODELS_DIR=./models
+
+   # Concurrency
+   MAX_CONCURRENT_TRANSCRIPTIONS=2
+
+   # Streaming chunk size (ms)
+   STREAM_CHUNK_DURATION_MS=5000
+   ```
+
+5. **Build the whisper.cpp Binary**
+
+   The setup script clones, builds, and installs the `whisper-cli` binary:
+
+   ```bash
+   chmod +x setup_whisper.sh
+   ./setup_whisper.sh
+   ```
+
+   <Aside type="note">
+     The script automatically detects your platform (macOS/Linux), enables CUDA if an NVIDIA GPU is found, and downloads a default `tiny.en` model.
+   </Aside>
+
+6. **Initialize the Database & Create an API Key**
+
+   ```bash
+   python -m app.cli init
+   python -m app.cli create --name "MyFirstKey"
+   ```
+
+   Save the generated token — you'll need it for all API requests.
+
+7. **Start the Server**
+
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port 7860 --reload
+   ```
+
+</Steps>
+
+---
+
+## Verify Your Installation
+
+Once the server is running, verify it works:
+
+### Health Check
+
+```bash
+curl http://localhost:7860/ping
+```
+
+Expected response:
+
+```json
+{ "ping": "pong", "status": "healthy" }
+```
+
+### Swagger UI
+
+Open [http://localhost:7860/docs](http://localhost:7860/docs) in your browser to access the interactive API documentation.
+
+### First Transcription
+
+```bash
+curl -X POST 'http://localhost:7860/v1/listen' \
+  -H "Authorization: Token YOUR_API_KEY" \
+  -H "Content-Type: audio/wav" \
+  --data-binary @audio/jfk.wav
+```
+
+---
+
+## Environment Variables Reference
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SECRET_KEY` | — | **Required.** Secret for token hashing |
+| `SERVER_HOST` | `http://localhost:7860` | Public server URL |
+| `DATABASE_URL` | `sqlite:///./whisper.db` | SQLAlchemy database connection string |
+| `WHISPER_BINARY_PATH` | `./binary/whisper-cli` | Path to the compiled whisper-cli binary |
+| `MODELS_DIR` | `./models` | Directory containing `.bin` model files |
+| `MAX_CONCURRENT_TRANSCRIPTIONS` | `2` | Max parallel transcription processes |
+| `STREAM_CHUNK_DURATION_MS` | `5000` | Streaming buffer duration in milliseconds |
+| `ENABLE_TEST_TOKEN_ENDPOINT` | `false` | Enable `/v1/auth/test-token` in Swagger |
+| `BACKEND_CORS_ORIGINS` | `[]` | Allowed CORS origins (JSON array) |
+
+<Aside type="caution">
+  Never set `ENABLE_TEST_TOKEN_ENDPOINT=true` in production — it allows anyone to generate API keys via the web UI.
+</Aside>
+
+---
+
+## Next Steps
+
+- [Set up authentication](/authentication/) — manage API keys with the CLI
+- [Explore the API](/api-reference/) — full endpoint reference
+- [Deploy with Docker](/docker/) — containerized production setup

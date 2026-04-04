@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Whisper API">
+  <rect width="64" height="64" rx="12" fill="#EAEFEF"/>
+  <rect x="6" y="6" width="52" height="52" rx="10" fill="none" stroke="#25343F" stroke-opacity="0.28" stroke-width="2"/>
+  <path d="M12 18l8 28h6l6-20 6 20h6l8-28h-7l-4.2 17.2L35.4 18h-6.8L19.2 35.2 15 18z" fill="#25343F"/>
+</svg>

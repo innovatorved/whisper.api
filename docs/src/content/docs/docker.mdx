@@ -1,0 +1,251 @@
+---
+title: Docker Deployment
+description: Deploy Whisper API with Docker — Dockerfile walkthrough, build instructions, environment configuration, and production tips.
+---
+
+
+The Whisper API includes a production-ready Dockerfile that builds the `whisper-cli` binary from source and packages everything into a single container.
+
+---
+
+## Quick Start
+
+<Steps>
+
+1. **Build the Docker image**:
+   ```bash
+   docker build -t whisper-api .
+   ```
+
+2. **Run the container**:
+   ```bash
+   docker run -d \
+     --name whisper \
+     -p 7860:7860 \
+     -e SECRET_KEY="your-production-secret" \
+     -e ENABLE_TEST_TOKEN_ENDPOINT=false \
+     whisper-api
+   ```
+
+3. **Verify it's running**:
+   ```bash
+   curl http://localhost:7860/ping
+   ```
+
+</Steps>
+
+---
+
+## Dockerfile Walkthrough
+
+Here's a detailed breakdown of the Dockerfile:
+
+### Base Image
+
+```dockerfile
+FROM python:3.10-slim-bookworm
+```
+
+Uses Python 3.10 on Debian Bookworm (slim) for a minimal footprint with modern system libraries.
+
+### Environment Setup
+
+```dockerfile
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
+```
+
+| Variable | Purpose |
+|----------|---------|
+| `PYTHONDONTWRITEBYTECODE` | Prevents `.pyc` file generation |
+| `PYTHONUNBUFFERED` | Ensures real-time log output |
+| `HOME` | Sets home directory for the non-root user |
+
+### System Dependencies
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    curl \
+    git \
+    cmake \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+| Package | Purpose |
+|---------|---------|
+| `ffmpeg` | Audio transcoding (format conversion) |
+| `curl` | Model downloads |
+| `git` | Clone whisper.cpp source |
+| `cmake` | Build system for whisper.cpp |
+| `build-essential` | C++ compiler and tools |
+
+### Security — Non-Root User
+
+```dockerfile
+RUN useradd -m -u 1000 user
+USER user
+```
+
+The container runs as a non-root user (`uid 1000`) for security. This is especially important for platforms like Hugging Face Spaces.
+
+### Binary Build
+
+```dockerfile
+RUN chmod +x ./setup_whisper.sh && ./setup_whisper.sh
+```
+
+The setup script:
+1. Clones `whisper.cpp` from GitHub
+2. Detects platform (ARM/x86) and GPU availability
+3. Builds the `whisper-cli` binary with CMake
+4. Installs it to `binary/whisper-cli`
+5. Downloads the `tiny.en` model
+
+---
+
+## Environment Variables
+
+Pass environment variables at runtime with `-e` flags:
+
+```bash
+docker run -d \
+  -p 7860:7860 \
+  -e SECRET_KEY="strong-random-secret-here" \
+  -e DATABASE_URL="sqlite:///./whisper.db" \
+  -e MODELS_DIR="./models" \
+  -e MAX_CONCURRENT_TRANSCRIPTIONS=4 \
+  -e STREAM_CHUNK_DURATION_MS=3000 \
+  -e ENABLE_TEST_TOKEN_ENDPOINT=false \
+  whisper-api
+```
+
+<Aside type="caution">
+  Always set `ENABLE_TEST_TOKEN_ENDPOINT=false` in production. The Dockerfile currently sets it to `true` for development convenience — override it at runtime.
+</Aside>
+
+---
+
+## Persistent Storage
+
+### Database
+
+Mount a volume to persist the SQLite database (API keys) across container restarts:
+
+```bash
+docker run -d \
+  -p 7860:7860 \
+  -v $(pwd)/data:/home/user/app/data \
+  -e DATABASE_URL="sqlite:///./data/whisper.db" \
+  whisper-api
+```
+
+### Models
+
+Mount a local models directory to avoid re-downloading:
+
+```bash
+docker run -d \
+  -p 7860:7860 \
+  -v $(pwd)/models:/home/user/app/models \
+  whisper-api
+```
+
+---
+
+## Docker Compose
+
+For a more complete setup, use Docker Compose:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  whisper-api:
+    build: .
+    container_name: whisper-api
+    ports:
+      - "7860:7860"
+    environment:
+      - SECRET_KEY=your-production-secret
+      - ENABLE_TEST_TOKEN_ENDPOINT=false
+      - MAX_CONCURRENT_TRANSCRIPTIONS=4
+      - DATABASE_URL=sqlite:///./data/whisper.db
+    volumes:
+      - ./data:/home/user/app/data
+      - ./models:/home/user/app/models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+```bash
+docker compose up -d
+```
+
+---
+
+## GPU Support (NVIDIA CUDA)
+
+If your host has an NVIDIA GPU with the CUDA toolkit installed:
+
+```bash
+docker run -d \
+  --gpus all \
+  -p 7860:7860 \
+  -e SECRET_KEY="your-secret" \
+  whisper-api
+```
+
+The `setup_whisper.sh` script automatically detects `nvidia-smi` and enables CUDA support during the build. For GPU support, ensure:
+
+1. [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) is installed
+2. The build is done on a host with CUDA drivers
+3. Pass `--gpus all` at runtime
+
+---
+
+## Hugging Face Spaces
+
+The Dockerfile is pre-configured for [Hugging Face Spaces](https://huggingface.co/spaces) deployment:
+
+- Uses port `7860` (HF Spaces standard)
+- Non-root user with `uid 1000`
+- Auto-builds on push to the HF repository
+
+The `README.md` frontmatter contains HF Spaces metadata:
+
+```yaml
+---
+title: whisper.api
+sdk: docker
+app_file: Dockerfile
+app_port: 7860
+---
+```
+
+---
+
+## Production Checklist
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Set strong `SECRET_KEY` | Required | Use a random 32+ character string |
+| Disable test token endpoint | Required | `ENABLE_TEST_TOKEN_ENDPOINT=false` |
+| Mount persistent volumes | Recommended | Database and models |
+| Set up reverse proxy | Recommended | nginx/Caddy with TLS |
+| Configure CORS origins | Recommended | Restrict to your domains |
+| Add health check monitoring | Recommended | Use `/ping` endpoint |
+| Tune concurrency | Optional | `MAX_CONCURRENT_TRANSCRIPTIONS` |
+| Use larger model | Optional | `small.en` or `medium.en` for production |
+
+<Aside type="tip">
+  For high-traffic production deployments, consider running multiple container replicas behind a load balancer, with each instance using a shared database volume.
+</Aside>

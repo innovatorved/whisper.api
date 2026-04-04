@@ -1,0 +1,130 @@
+---
+title: Models
+description: Managing whisper.cpp GGML models — available sizes, quantization formats, downloading, and performance comparison.
+---
+
+
+The Whisper API uses **GGML-format** model files (`.bin`) compatible with [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Models live in the `models/` directory and are auto-discovered by the server on startup.
+
+---
+
+## Available Model Sizes
+
+| Model | Parameters | Disk Size | Relative Speed | Best For |
+|-------|-----------|-----------|----------------|----------|
+| `tiny` | 39M | ~75 MB | Fastest | Quick prototyping, low-resource devices |
+| `tiny.en` | 39M | ~75 MB | Fastest | English-only, highest speed |
+| `base` | 74M | ~142 MB | Fast | Good balance for English |
+| `base.en` | 74M | ~142 MB | Fast | English-only with better accuracy |
+| `small` | 244M | ~466 MB | Medium | Multi-language, good accuracy |
+| `small.en` | 244M | ~466 MB | Medium | English-only, recommended for production |
+| `medium` | 769M | ~1.5 GB | Slow | High accuracy, multi-language |
+| `medium.en` | 769M | ~1.5 GB | Slow | English-only, near-best accuracy |
+| `large-v2` | 1550M | ~3.1 GB | Slowest | Maximum accuracy, all languages |
+| `large-v3` | 1550M | ~3.1 GB | Slowest | Latest, best multilingual |
+
+<Aside type="tip">
+  For most CPU-based production workloads, **`small.en`** with **`q5_1` quantization** offers the best balance of speed and accuracy.
+</Aside>
+
+---
+
+## Quantization Formats
+
+GGML models support multiple quantization levels to trade accuracy for speed and memory:
+
+| Format | Bits | Size Reduction | Quality | Recommended |
+|--------|------|---------------|---------|-------------|
+| `f32` | 32-bit | 1x (baseline) | Highest | No (too large) |
+| `f16` | 16-bit | ~0.5x | Very High | Research only |
+| `q8_0` | 8-bit | ~0.25x | High | Yes, if memory allows |
+| `q5_1` | 5-bit | ~0.16x | Good | **Best overall** |
+| `q5_0` | 5-bit | ~0.16x | Good | Alternative to q5_1 |
+| `q4_1` | 4-bit | ~0.125x | Fair | Max speed priority |
+| `q4_0` | 4-bit | ~0.125x | Fair | Smallest size |
+
+---
+
+## Downloading Models
+
+### From Hugging Face
+
+Official GGML models are available on the [whisper.cpp Hugging Face repository](https://huggingface.co/ggerganov/whisper.cpp/tree/main):
+
+```bash
+# Download tiny.en (q5_1 quantized)
+curl -L -o models/ggml-tiny.en-q5_1.bin \
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin"
+
+# Download small.en (q5_1 quantized)
+curl -L -o models/ggml-small.en-q5_1.bin \
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin"
+
+# Download base.en (full precision)
+curl -L -o models/ggml-base.en.bin \
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"
+```
+
+### From the Setup Script
+
+The `setup_whisper.sh` script automatically downloads the `tiny.en` model if none exists:
+
+```bash
+./setup_whisper.sh
+```
+
+---
+
+## Adding a New Model
+
+<Steps>
+
+1. **Download** the `.bin` file from Hugging Face or another source
+
+2. **Move** it to the `models/` directory:
+   ```bash
+   mv ggml-small.en-q5_1.bin models/
+   ```
+
+3. **Restart** the API server:
+   ```bash
+   # Stop the running server (Ctrl+C)
+   uvicorn app.main:app --host 0.0.0.0 --port 7860
+   ```
+
+4. **Verify** the model is available:
+   ```bash
+   curl -X GET 'http://localhost:7860/v1/models' \
+     -H "Authorization: Token YOUR_API_KEY"
+   ```
+
+</Steps>
+
+---
+
+## Model File Naming
+
+The API uses the model filename (without `ggml-` prefix and `.bin` suffix) as the model identifier in API requests:
+
+| File Name | API `model` Parameter |
+|-----------|----------------------|
+| `ggml-tiny.en.bin` | `tiny.en` |
+| `ggml-model-whisper-small.en-q5_1.bin` | `model-whisper-small.en-q5_1` |
+| `ggml-base.en.bin` | `base.en` |
+
+---
+
+## Model Directory Configuration
+
+The model directory is configured via the `MODELS_DIR` environment variable:
+
+```ini
+# .env
+MODELS_DIR=./models
+```
+
+The server scans this directory on startup and makes all `.bin` files available for transcription.
+
+<Aside type="note">
+  The `models/` directory is included in `.gitignore` by default — model files are too large for version control. Download them during deployment or include them in your Docker image.
+</Aside>

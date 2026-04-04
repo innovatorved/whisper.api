@@ -1,0 +1,90 @@
+---
+title: Whisper API
+description: Open-source, high-performance, self-hosted speech-to-text API powered by whisper.cpp.
+template: splash
+hero:
+  tagline: A self-hosted, Deepgram-compatible speech-to-text API powered by whisper.cpp. Full data ownership, zero vendor lock-in, and production-ready from day one.
+  actions:
+    - text: Get Started
+      link: /getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: API Reference
+      link: /api-reference/
+      icon: external
+      variant: minimal
+---
+
+
+## What is Whisper API?
+
+Whisper API wraps the blazing-fast [whisper.cpp](https://github.com/ggerganov/whisper.cpp) engine with a clean, **Deepgram-compatible** REST and WebSocket interface. Deploy it on your own infrastructure — your audio never leaves your servers.
+
+It handles everything from simple file uploads to real-time microphone streaming, with built-in subtitle export and speaker diarization.
+
+---
+
+## Core Capabilities
+
+<CardGrid>
+  <Card title="Deepgram-Compatible API" icon="puzzle">
+    Drop-in replacement for `/v1/listen` endpoints. Migrate existing Deepgram integrations with minimal code changes.
+  </Card>
+  <Card title="Real-Time Streaming" icon="rocket">
+    WebSocket endpoint for live transcription. Supports PCM, WebM, OGG, FLAC, and auto-detection.
+  </Card>
+  <Card title="Local CPU Transcription" icon="laptop">
+    Run transcription directly on your own machine CPU with no external cloud dependency.
+  </Card>
+  <Card title="Offline Key Management" icon="approve-check-circle">
+    Generate and revoke API keys via CLI. No external auth services required.
+  </Card>
+</CardGrid>
+
+---
+
+## Architecture
+
+The server sits between your clients and the whisper.cpp binary, handling audio conversion, authentication, and response formatting.
+
+```
+Client (cURL / Python / JS / Deepgram SDK)
+  │
+  ▼  HTTP POST or WebSocket
+FastAPI Server (:7860)
+  ├── /v1/listen     POST   → Transcribe uploaded file or URL
+  ├── /v1/listen     WS     → Real-time streaming transcription
+  ├── /v1/models     GET    → List available GGML models
+  └── /v1/auth       POST   → Test token generation (dev only)
+  │
+  ▼  subprocess
+whisper-cli (compiled from whisper.cpp)
+  │
+  ▼  reads
+models/ggml-*.bin (GGML quantized model files)
+```
+
+---
+
+## Quick Links
+
+<CardGrid>
+  <LinkCard title="Installation" href="/getting-started/" description="Clone, install dependencies, build the binary, and start the server." />
+  <LinkCard title="REST Reference" href="/api-reference/" description="Parameters, headers, response schemas, and error codes for /v1/listen." />
+  <LinkCard title="WebSocket Streaming" href="/streaming/" description="Connection protocol, audio formats, control messages, and example scripts." />
+  <LinkCard title="Docker" href="/docker/" description="Production deployment with Docker and Docker Compose." />
+</CardGrid>
+
+---
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Runtime | Python 3.10+ / FastAPI |
+| Transcription | whisper.cpp (C++ binary via subprocess) |
+| Models | GGML quantized `.bin` files |
+| Database | SQLite via SQLAlchemy |
+| Streaming | Native FastAPI WebSocket |
+| Container | Docker (Debian Bookworm) |
+| License | MIT |

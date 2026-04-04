@@ -1,0 +1,199 @@
+---
+title: Contributing
+description: How to contribute to Whisper API — reporting bugs, requesting features, submitting code, and development setup.
+---
+
+
+Thank you for considering contributing to the Whisper API! We welcome all contributions that improve the project — from bug fixes and documentation to new features and performance improvements.
+
+---
+
+## Ways to Contribute
+
+| Type | Description |
+|------|-------------|
+| **Bug Reports** | Found something broken? Open an issue with reproduction steps |
+| **Feature Requests** | Have an idea? Share it as a feature request issue |
+| **Documentation** | Improve guides, fix typos, add examples |
+| **Code Fixes** | Fix bugs, improve error handling, optimize performance |
+| **New Features** | Implement new endpoints, formats, or integrations |
+| **Tests** | Write unit tests, integration tests, or end-to-end tests |
+
+---
+
+## Development Setup
+
+<Steps>
+
+1. **Fork the repository** on GitHub
+
+2. **Clone your fork**:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/whisper.api.git
+   cd whisper.api
+   ```
+
+3. **Create a virtual environment**:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+
+4. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+5. **Set up environment**:
+   ```bash
+   cp .env.example .env
+   ```
+
+6. **Build the whisper binary**:
+   ```bash
+   chmod +x setup_whisper.sh
+   ./setup_whisper.sh
+   ```
+
+7. **Initialize the database**:
+   ```bash
+   python -m app.cli init
+   python -m app.cli create --name "DevToken"
+   ```
+
+8. **Run the dev server**:
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port 7860 --reload
+   ```
+
+</Steps>
+
+---
+
+## Running Tests
+
+```bash
+# Run the full test suite
+pytest
+
+# Run with coverage report
+pytest --cov=app --cov-report=term-missing
+
+# Run a specific test file
+pytest app/tests/test_api.py -v
+```
+
+---
+
+## Submitting Changes
+
+<Steps>
+
+1. **Create a feature branch**:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make your changes** and commit with clear messages:
+   ```bash
+   git add .
+   git commit -m "feat: add support for FLAC file uploads"
+   ```
+
+3. **Format your code** with Black:
+   ```bash
+   black app/
+   ```
+
+4. **Run tests** to make sure nothing is broken:
+   ```bash
+   pytest
+   ```
+
+5. **Push** to your fork:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+6. **Open a Pull Request** on GitHub with a clear description of what your changes do
+
+</Steps>
+
+---
+
+## Reporting Bugs
+
+When filing a bug report, please include:
+
+| Field | Description |
+|-------|-------------|
+| **Steps to Reproduce** | Exact commands or actions that trigger the bug |
+| **Expected Result** | What you expected to happen |
+| **Actual Result** | What actually happened (include error messages) |
+| **Environment** | OS, Python version, model used |
+| **Logs** | Relevant server logs (`server.log`) |
+
+---
+
+## Requesting Features
+
+When requesting a new feature, include:
+
+| Field | Description |
+|-------|-------------|
+| **Description** | Clear description of the feature |
+| **Use Case** | Why you need this feature |
+| **Alternatives** | Any workarounds you've considered |
+
+---
+
+## Project Structure
+
+```
+whisper.api/
+├── app/
+│   ├── api/
+│   │   ├── endpoints/
+│   │   │   ├── listen.py      # POST /v1/listen & WS /v1/listen
+│   │   │   ├── models.py      # GET /v1/models
+│   │   │   └── auth.py        # POST /v1/auth/test-token
+│   │   └── models/            # Pydantic request/response schemas
+│   ├── core/
+│   │   ├── config.py          # Settings (env vars)
+│   │   ├── database.py        # SQLAlchemy setup
+│   │   ├── errors.py          # Error handlers
+│   │   └── models/            # Database models (ApiKey)
+│   ├── utils/                 # Helper functions
+│   ├── tests/                 # Test suite
+│   ├── cli.py                 # Offline key management CLI
+│   └── main.py                # FastAPI app entry point
+├── binary/                    # whisper-cli binary (built from source)
+├── models/                    # GGML model files (.bin)
+├── docs/                      # Markdown documentation
+├── examples/                  # Example scripts
+├── setup_whisper.sh           # Build script for whisper.cpp
+├── requirements.txt           # Python dependencies
+├── Dockerfile                 # Container build
+└── .env.example               # Environment template
+```
+
+---
+
+## Code Style
+
+- **Formatter**: [Black](https://black.readthedocs.io/) (default settings)
+- **Type Hints**: Use Python type hints where possible
+- **Docstrings**: Use triple-quoted docstrings for public functions
+- **Commits**: Use [Conventional Commits](https://www.conventionalcommits.org/) format
+
+<Aside type="note">
+  The CI pipeline runs `pytest` automatically on pull requests. Make sure all tests pass before requesting review.
+</Aside>
+
+---
+
+## License
+
+This project is licensed under the [MIT License](https://choosealicense.com/licenses/mit/). By contributing, you agree that your contributions will be licensed under the same terms.
+
+**Author:** [Ved Gupta](https://www.github.com/innovatorved)

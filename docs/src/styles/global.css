@@ -1,0 +1,327 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  color-scheme: light;
+  --bg: #eaefef;
+  --bg-secondary: #eaefef;
+  --panel: #eaefef;
+  --muted: rgba(37, 52, 63, 0.72);
+  --text: #25343f;
+  --line: rgba(37, 52, 63, 0.22);
+  --brand: #25343f;
+  --brand-light: #25343f;
+  --accent: #25343f;
+  --code-bg: #25343f;
+  --shadow-sm: 0 1px 2px rgba(37, 52, 63, 0.06);
+  --shadow-md: 0 4px 6px rgba(37, 52, 63, 0.08);
+  --shadow-lg: 0 10px 25px rgba(37, 52, 63, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--text);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--text);
+  opacity: 0.8;
+}
+
+button,
+input[type="button"],
+input[type="submit"] {
+  transition: all 0.2s ease;
+}
+
+/* Utilities */
+.theme-surface {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.theme-surface:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--line);
+}
+
+.theme-text {
+  color: var(--text);
+}
+
+.theme-muted {
+  color: var(--muted);
+}
+
+.theme-accent {
+  color: var(--text);
+}
+
+.theme-accent-bg {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-weight: 600;
+}
+
+.theme-accent-bg:hover {
+  filter: brightness(1.1);
+}
+
+/* Prose styling */
+.prose {
+  color: var(--text);
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 2em;
+  margin-bottom: 0.5em;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.prose h1 {
+  font-size: 2.8rem;
+  border-bottom: 3px solid var(--line);
+  padding-bottom: 0.5em;
+  margin-bottom: 1em;
+}
+
+.prose h2 {
+  font-size: 2rem;
+  border-left: 4px solid var(--line);
+  padding-left: 1rem;
+  margin-left: -1rem;
+}
+
+.prose h3 {
+  font-size: 1.5rem;
+  color: var(--text);
+}
+
+.prose h4 {
+  font-size: 1.25rem;
+}
+
+.prose p {
+  margin: 1em 0;
+  line-height: 1.75;
+}
+
+.prose a {
+  color: var(--text);
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.prose a:hover {
+  color: var(--text);
+  border-bottom-color: var(--line);
+}
+
+/* Code styling */
+.prose pre {
+  background: var(--code-bg);
+  color: var(--bg);
+  border-radius: 0.75rem;
+  border: 1px solid var(--line);
+  padding: 1.5rem;
+  overflow-x: auto;
+  box-shadow: var(--shadow-lg);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin: 1.5em 0;
+}
+
+.prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+}
+
+.prose :where(code):not(:where(pre code)) {
+  background: rgba(37, 52, 63, 0.08);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 0.25rem;
+  padding: 0.2em 0.5em;
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+/* Tables */
+.prose table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 2em 0;
+  border-collapse: collapse;
+}
+
+.prose thead {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.prose th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  border: none;
+  font-size: 0.95rem;
+}
+
+.prose tbody tr {
+  border-bottom: 1px solid var(--line);
+  transition: background-color 0.2s ease;
+}
+
+.prose tbody tr:hover {
+  background: rgba(37, 52, 63, 0.05);
+}
+
+.prose td {
+  padding: 1rem;
+  border: none;
+}
+
+/* Lists */
+.prose ul,
+.prose ol {
+  margin: 1em 0;
+  padding-left: 2rem;
+}
+
+.prose li {
+  margin: 0.5em 0;
+}
+
+.prose ul > li::marker {
+  color: var(--text);
+  font-weight: bold;
+}
+
+.prose ol > li::marker {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Blockquote */
+.prose blockquote {
+  border-left: 4px solid var(--line);
+  padding: 1.5em 1.5em;
+  margin: 1.5em 0;
+  background: rgba(37, 52, 63, 0.05);
+  border-radius: 0.5rem;
+  font-style: italic;
+  color: var(--text);
+}
+
+.prose blockquote p {
+  margin: 0;
+}
+
+/* Horizontal rule */
+.prose hr {
+  border: none;
+  height: 2px;
+  background: var(--line);
+  margin: 3em 0;
+}
+
+/* Strong and emphasis */
+.prose strong {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.prose em {
+  font-style: italic;
+  color: var(--text);
+}
+
+/* Images */
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+  margin: 1.5em 0;
+}
+
+/* Links in prose */
+.prose a code {
+  color: var(--text);
+}
+
+/* Right sidebar TOC active state */
+.toc-link {
+  border-radius: 0.5rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.toc-link.is-active {
+  background: rgba(37, 52, 63, 0.1);
+  color: var(--text) !important;
+  font-weight: 700;
+}
+
+.toc-link.toc-depth-2.is-active {
+  padding-left: 1rem;
+}
+
+.toc-link.toc-depth-3.is-active {
+  padding-left: 2rem;
+}
+
+/* Always-visible card bottom edge */
+.card-bottom-line {
+  border-bottom: 2px solid rgba(37, 52, 63, 0.42);
+  box-shadow: inset 0 -1px 0 rgba(37, 52, 63, 0.25);
+}
+
+.search-result-item {
+  transition: background-color 0.15s ease;
+}
+
+.search-result-item:hover,
+.search-result-item.is-active {
+  background: rgba(37, 52, 63, 0.1);
+}

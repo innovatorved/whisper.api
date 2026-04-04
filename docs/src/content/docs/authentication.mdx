@@ -1,0 +1,174 @@
+---
+title: Authentication
+description: Manage API keys using the offline CLI — create, list, and revoke tokens for securing your Whisper API.
+---
+
+
+The Whisper API uses **permanent bearer tokens** for authentication. Keys are managed entirely offline through a Python CLI — no external auth service required.
+
+---
+
+## How It Works
+
+1. You generate API keys locally using `python -m app.cli`
+2. Keys are stored in your SQLite database
+3. Clients pass the key in the `Authorization` header
+4. The server validates the key on every request
+
+---
+
+## CLI Commands
+
+### Initialize the Database
+
+Before generating your first key, ensure the database tables exist:
+
+```bash
+python -m app.cli init
+```
+
+```
+Initializing Database structure...
+Database initialized successfully.
+```
+
+### Create a New API Key
+
+Generate a new token with an optional descriptive name:
+
+```bash
+python -m app.cli create --name "AdminToken"
+```
+
+**Output:**
+```
+API Key Created Successfully!
+----------------------------------------
+Name:  AdminToken
+Token: 90e4b3189f324cc881e708c27d81d1d0...
+----------------------------------------
+Keep this token safe! Pass it in the Authorization header as: Token <token>
+```
+
+<Aside type="caution">
+  The full token is only shown **once** at creation time. Store it securely — it cannot be retrieved later. You can only see token prefixes in the key listing.
+</Aside>
+
+### List Active Keys
+
+View all generated keys and their creation timestamps:
+
+```bash
+python -m app.cli list
+```
+
+```
+Active API Keys
+------------------------------------------------------------
+Token: 90e4b318*** | Name: AdminToken | Created: 2026-03-29 10:15:00
+Token: a1b2c3d4*** | Name: ReadOnly  | Created: 2026-03-30 14:22:00
+------------------------------------------------------------
+```
+
+### Revoke a Key
+
+Permanently revoke access by passing the token prefix:
+
+```bash
+python -m app.cli revoke 90e4b318
+```
+
+```
+Successfully revoked key 'AdminToken' starting with 90e4b318
+```
+
+<Aside type="note">
+  If multiple keys match the prefix, the CLI will ask you to be more specific. Use a longer prefix to uniquely identify the key.
+</Aside>
+
+---
+
+## Using API Keys
+
+### REST API
+
+Pass the token in the `Authorization` header with the `Token` prefix:
+
+<Tabs>
+  <TabItem label="cURL">
+  ```bash
+  curl -X POST 'http://localhost:7860/v1/listen' \
+    -H "Authorization: Token YOUR_API_KEY" \
+    -H "Content-Type: audio/wav" \
+    --data-binary @audio.wav
+  ```
+  </TabItem>
+  <TabItem label="Python">
+  ```python
+  import httpx
+
+  headers = {
+      "Authorization": "Token YOUR_API_KEY",
+      "Content-Type": "audio/wav",
+  }
+
+  with open("audio.wav", "rb") as f:
+      response = httpx.post(
+          "http://localhost:7860/v1/listen",
+          headers=headers,
+          content=f.read(),
+      )
+
+  print(response.json())
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```javascript
+  const response = await fetch('http://localhost:7860/v1/listen', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Token YOUR_API_KEY',
+      'Content-Type': 'audio/wav',
+    },
+    body: audioBuffer,
+  });
+
+  const result = await response.json();
+  console.log(result);
+  ```
+  </TabItem>
+</Tabs>
+
+### WebSocket
+
+For WebSocket connections, pass the token as a **query parameter**:
+
+```
+ws://localhost:7860/v1/listen?token=YOUR_API_KEY&model=tiny.en
+```
+
+---
+
+## Test Token Endpoint
+
+For development and testing, you can enable a public endpoint that generates temporary tokens directly from the Swagger UI:
+
+1. Set `ENABLE_TEST_TOKEN_ENDPOINT=true` in your `.env` file
+2. Restart the server
+3. Visit `http://localhost:7860/docs` and use the `POST /v1/auth/test-token` endpoint
+
+<Aside type="caution">
+  **Never enable this in production!** It allows anyone with network access to generate valid API keys.
+</Aside>
+
+---
+
+## Security Best Practices
+
+| Practice | Description |
+|----------|-------------|
+| **Rotate keys regularly** | Revoke old keys and create new ones periodically |
+| **Use descriptive names** | Name keys by purpose (`ProductionApp`, `TestingCI`) |
+| **Limit exposure** | Don't commit tokens to version control |
+| **Disable test endpoint** | Set `ENABLE_TEST_TOKEN_ENDPOINT=false` in production |
+| **Use HTTPS** | Always run behind a TLS-terminating reverse proxy |
