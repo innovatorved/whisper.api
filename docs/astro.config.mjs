@@ -5,9 +5,6 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   site: process.env.SITE_URL ?? "https://whisper.vedgupta.in",
-  redirects: {
-    "/": "/docs",
-  },
   integrations: [mdx(), sitemap()],
   vite: {
     plugins: [tailwindcss()]
