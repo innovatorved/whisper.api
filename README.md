@@ -26,28 +26,26 @@ This project provides a **Deepgram-compatible** interface (REST & WebSocket), ma
 
 ---
 
-## 📚 Documentation
+## Documentation
 
-Full documentation is available as a self-contained Astro Starlight site in the `docs/` directory. To run it locally:
+Documentation lives in the `docs/` folder (Astro Starlight). Run it locally with Bun:
 
 ```bash
-cd docs && npm install && npm run dev
+cd docs && bun install && bun run dev
 ```
 
-The docs site covers:
+What you will find in the docs:
 
-- **Getting Started** — Installation, prerequisites, environment variables, and server setup
-- **Authentication** — API key generation, management, and usage patterns
-- **REST API Reference** — Endpoint parameters, request/response schemas, and error codes
-- **Live Streaming** — WebSocket protocol, audio formats, and control messages
-- **Code Examples** — Production-ready snippets for cURL, Python, and JavaScript
-- **Models** — GGML model sizes, quantization formats, and download links
-- **Docker Deployment** — Dockerfile walkthrough and production checklist
-- **Contributing** — Development setup, PR workflow, and project structure
+- Getting started and local setup
+- Authentication and API keys
+- REST and WebSocket API reference
+- Code examples
+- Models and deployment guides
+- Contributing workflow
 
 ---
 
-## 🛠️ Quick Start
+## Quick Start
 
 ### 1. Installation
 ```bash
@@ -86,18 +84,10 @@ curl -X POST 'http://localhost:7860/v1/listen' \
   -d '{"url": "https://example.com/audio.mp3"}'
 ```
 
-### 6. Export Subtitles (cURL)
-```bash
-curl -X POST 'http://localhost:7860/v1/listen?response_format=srt' \
-  -H "Authorization: Token <YOUR_KEY>" \
-  -H "Content-Type: audio/wav" \
-  --data-binary @audio.wav > output.srt
-```
-
 
 ---
 
-## 📄 License & References
+## License & References
 
 [MIT License](https://choosealicense.com/licenses/mit/)
 
