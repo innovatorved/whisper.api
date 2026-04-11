@@ -119,12 +119,17 @@ docker run -d \
   -e MODELS_DIR="./models" \
   -e MAX_CONCURRENT_TRANSCRIPTIONS=4 \
   -e STREAM_CHUNK_DURATION_MS=3000 \
+  -e MAX_AUDIO_UPLOAD_BYTES=52428800 \
+  -e MAX_AUDIO_DOWNLOAD_BYTES=52428800 \
+  -e AUDIO_URL_FOLLOW_REDIRECTS=false \
+  -e WHISPER_CLI_TIMEOUT_SEC=3600 \
+  -e FFMPEG_TIMEOUT_SEC=600 \
   -e ENABLE_TEST_TOKEN_ENDPOINT=false \
   whisper-api
 ```
 
 <Aside type="caution">
-  Always set `ENABLE_TEST_TOKEN_ENDPOINT=false` in production. The Dockerfile currently sets it to `true` for development convenience — override it at runtime.
+  Keep `ENABLE_TEST_TOKEN_ENDPOINT=false` in production. The image defaults to `false`; only set it to `true` temporarily on trusted dev machines if you need Swagger token minting.
 </Aside>
 
 ---
@@ -174,6 +179,9 @@ services:
       - SECRET_KEY=your-production-secret
       - ENABLE_TEST_TOKEN_ENDPOINT=false
       - MAX_CONCURRENT_TRANSCRIPTIONS=4
+      - MAX_AUDIO_UPLOAD_BYTES=52428800
+      - MAX_AUDIO_DOWNLOAD_BYTES=52428800
+      - AUDIO_URL_FOLLOW_REDIRECTS=false
       - DATABASE_URL=sqlite:///./data/whisper.db
     volumes:
       - ./data:/home/user/app/data
@@ -244,7 +252,10 @@ app_port: 7860
 | Configure CORS origins | Recommended | Restrict to your domains |
 | Add health check monitoring | Recommended | Use `/ping` endpoint |
 | Tune concurrency | Optional | `MAX_CONCURRENT_TRANSCRIPTIONS` |
-| Use larger model | Optional | `small.en` or `medium.en` for production |
+| Tune upload / URL limits | Optional | `MAX_AUDIO_UPLOAD_BYTES`, `MAX_AUDIO_DOWNLOAD_BYTES` |
+| URL redirects | Optional | `AUDIO_URL_FOLLOW_REDIRECTS` — keep `false` unless you need CDN redirects (see [API reference](/api-reference/)) |
+| Subprocess timeouts | Optional | `WHISPER_CLI_TIMEOUT_SEC`, `FFMPEG_TIMEOUT_SEC` |
+| Use larger model | Optional | Mount or bake additional GGML models in `MODELS_DIR` |
 
 <Aside type="tip">
   For high-traffic production deployments, consider running multiple container replicas behind a load balancer, with each instance using a shared database volume.

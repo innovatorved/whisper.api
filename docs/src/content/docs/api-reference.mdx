@@ -13,7 +13,7 @@ The Whisper API provides a **Deepgram-compatible** REST interface for pre-record
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | <span class="badge badge-post">POST</span> | `/v1/listen` | Transcribe audio (file upload or URL) |
-| <span class="badge badge-get">GET</span> | `/v1/models` | List available models |
+| <span class="badge badge-get">GET</span> | `/v1/models` | List available models (no auth) |
 | <span class="badge badge-get">GET</span> | `/ping` | Health check |
 | <span class="badge badge-post">POST</span> | `/v1/auth/test-token` | Generate test token (dev only) |
 | <span class="badge badge-ws">WS</span> | `/v1/listen` | Live streaming (see [Streaming docs](/streaming/)) |
@@ -22,7 +22,7 @@ The Whisper API provides a **Deepgram-compatible** REST interface for pre-record
 
 ## POST `/v1/listen` — Transcribe Audio
 
-The primary transcription endpoint. Accepts audio either as a binary file upload or as a URL in a JSON body.
+The primary transcription endpoint. Accepts audio either as a binary file upload or as a URL in a JSON body. Upload size is capped by `MAX_AUDIO_UPLOAD_BYTES` (default 50 MiB).
 
 ### Request Parameters (Query String)
 
@@ -68,6 +68,15 @@ curl -X POST 'http://localhost:7860/v1/listen?model=tiny.en' \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/audio.mp3"}'
 ```
+
+### URL fetch rules (SSRF protection)
+
+When you pass `{"url": "..."}`, the server downloads the file for you. To reduce **SSRF** risk (callers tricking your server into hitting internal addresses), the implementation:
+
+- Allows only **`http`** and **`https`** URLs.
+- Resolves the hostname and **rejects** addresses that are not **publicly routable** (for example loopback, private RFC1918 ranges, link-local, and IPv6 ULA).
+- Enforces a maximum download size (`MAX_AUDIO_DOWNLOAD_BYTES`, default 50 MiB).
+- By default **does not follow redirects** (`AUDIO_URL_FOLLOW_REDIRECTS=false`). If you enable redirects for CDN short links, the server re-checks the **final** URL host after redirects.
 
 ---
 
@@ -152,11 +161,10 @@ ask what you can do for your country
 
 ## GET `/v1/models` — List Models
 
-Returns all `.bin` model files available in the `models/` directory.
+Returns metadata for each `.bin` model file present under `MODELS_DIR`. **No authentication required.**
 
 ```bash
-curl -X GET 'http://localhost:7860/v1/models' \
-  -H "Authorization: Token YOUR_API_KEY"
+curl -X GET 'http://localhost:7860/v1/models'
 ```
 
 **Response:**
@@ -164,10 +172,17 @@ curl -X GET 'http://localhost:7860/v1/models' \
 ```json
 {
   "models": [
-    "tiny.en",
-    "base.en",
-    "small.en"
-  ]
+    {
+      "name": "whisper-tiny.en",
+      "model_id": "tiny.en",
+      "description": "Tiny English-only Whisper model (~75MB). Fastest inference, good for English.",
+      "language": "en",
+      "version": "ggml-v1",
+      "file": "ggml-tiny.en.bin",
+      "size_bytes": 78643200
+    }
+  ],
+  "count": 1
 }
 ```
 
@@ -194,13 +209,15 @@ curl http://localhost:7860/ping
 
 | Status Code | Description |
 |-------------|-------------|
-| `400` | Bad request — invalid parameters or unsupported format |
+| `400` | Bad request — invalid parameters, unsupported format, URL policy violation, or download failure |
 | `401` | Unauthorized — missing or invalid API key |
-| `413` | Payload too large — audio file exceeds size limit |
+| `413` | Payload too large — upload body exceeds `MAX_AUDIO_UPLOAD_BYTES` |
 | `415` | Unsupported media type — unrecognized content type |
 | `422` | Validation error — malformed request body |
-| `500` | Internal server error — transcription engine failure |
-| `503` | Service unavailable — max concurrent transcriptions reached |
+| `500` | Internal server error — transcription or conversion failed |
+| `504` | Gateway timeout — `whisper-cli` or ffmpeg exceeded configured timeout |
+
+Concurrent transcriptions wait on an internal limiter (`MAX_CONCURRENT_TRANSCRIPTIONS`); requests are **queued**, not rejected with `503`, unless the client or proxy times out first.
 
 ### Error Response Format
 

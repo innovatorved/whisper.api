@@ -141,7 +141,13 @@ Pass the token in the `Authorization` header with the `Token` prefix:
 
 ### WebSocket
 
-For WebSocket connections, pass the token as a **query parameter**:
+You can authenticate the WebSocket in any of these ways (first match wins):
+
+1. Query parameter: `?token=YOUR_API_KEY` (convenient for quick tests; tokens may appear in access logs).
+2. Header: `Authorization: Token YOUR_API_KEY` (preferred when your client supports it).
+3. Subprotocol list: e.g. `Sec-WebSocket-Protocol: token, YOUR_API_KEY` (some browser Deepgram-style clients use this).
+
+Example with query token:
 
 ```
 ws://localhost:7860/v1/listen?token=YOUR_API_KEY&model=tiny.en

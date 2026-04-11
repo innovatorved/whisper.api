@@ -4,7 +4,7 @@ description: Managing whisper.cpp GGML models — available sizes, quantization 
 ---
 
 
-The Whisper API uses **GGML-format** model files (`.bin`) compatible with [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Models live in the `models/` directory and are auto-discovered by the server on startup.
+The Whisper API uses **GGML-format** model files (`.bin`) compatible with [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Files live under `MODELS_DIR` (default `models/`). The server exposes a **fixed registry** in code (`model_names` in `app/utils/constant.py`): `GET /v1/models` lists registry entries whose matching `.bin` file exists on disk. On startup, missing registry models can be downloaded automatically (see `app/utils/checks.py`).
 
 ---
 
@@ -86,16 +86,17 @@ The `setup_whisper.sh` script automatically downloads the `tiny.en` model if non
    mv ggml-small.en-q5_1.bin models/
    ```
 
-3. **Restart** the API server:
+3. **Register** the model in `app/utils/constant.py` (`model_names`, and optionally `model_info` / `model_urls`) so the API knows the `model` query id and filename.
+
+4. **Restart** the API server:
    ```bash
    # Stop the running server (Ctrl+C)
    uvicorn app.main:app --host 0.0.0.0 --port 7860
    ```
 
-4. **Verify** the model is available:
+5. **Verify** the model appears (no auth required):
    ```bash
-   curl -X GET 'http://localhost:7860/v1/models' \
-     -H "Authorization: Token YOUR_API_KEY"
+   curl -X GET 'http://localhost:7860/v1/models'
    ```
 
 </Steps>
@@ -123,7 +124,7 @@ The model directory is configured via the `MODELS_DIR` environment variable:
 MODELS_DIR=./models
 ```
 
-The server scans this directory on startup and makes all `.bin` files available for transcription.
+Only **registered** models (see `model_names`) with a present file under `MODELS_DIR` are listed and accepted by `/v1/listen`.
 
 <Aside type="note">
   The `models/` directory is included in `.gitignore` by default — model files are too large for version control. Download them during deployment or include them in your Docker image.

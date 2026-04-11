@@ -88,8 +88,15 @@ Before you begin, make sure you have the following installed:
    # Concurrency
    MAX_CONCURRENT_TRANSCRIPTIONS=2
 
-   # Streaming chunk size (ms)
-   STREAM_CHUNK_DURATION_MS=5000
+   # Streaming chunk size (ms) — wall-clock buffer before each WS transcribe pass
+   STREAM_CHUNK_DURATION_MS=2000
+
+   # Limits & safety (optional; defaults are sensible for production)
+   # MAX_AUDIO_UPLOAD_BYTES=52428800
+   # MAX_AUDIO_DOWNLOAD_BYTES=52428800
+   # AUDIO_URL_FOLLOW_REDIRECTS=false
+   # WHISPER_CLI_TIMEOUT_SEC=3600
+   # FFMPEG_TIMEOUT_SEC=600
    ```
 
 5. **Build the whisper.cpp Binary**
@@ -165,9 +172,14 @@ curl -X POST 'http://localhost:7860/v1/listen' \
 | `WHISPER_BINARY_PATH` | `./binary/whisper-cli` | Path to the compiled whisper-cli binary |
 | `MODELS_DIR` | `./models` | Directory containing `.bin` model files |
 | `MAX_CONCURRENT_TRANSCRIPTIONS` | `2` | Max parallel transcription processes |
-| `STREAM_CHUNK_DURATION_MS` | `5000` | Streaming buffer duration in milliseconds |
+| `STREAM_CHUNK_DURATION_MS` | `2000` | WebSocket: target wall-clock buffer length per chunk (ms); PCM sizing uses client `sample_rate` |
+| `MAX_AUDIO_UPLOAD_BYTES` | `52428800` (50 MiB) | Max size for raw or multipart upload bodies |
+| `MAX_AUDIO_DOWNLOAD_BYTES` | `52428800` (50 MiB) | Max size when downloading audio from a JSON `url` |
+| `AUDIO_URL_FOLLOW_REDIRECTS` | `false` | If `true`, follow redirects when fetching `url` (re-validates final host for SSRF) |
+| `WHISPER_CLI_TIMEOUT_SEC` | `3600` | Max seconds for a single `whisper-cli` run |
+| `FFMPEG_TIMEOUT_SEC` | `600` | Max seconds for ffmpeg conversion / probe operations |
 | `ENABLE_TEST_TOKEN_ENDPOINT` | `false` | Enable `/v1/auth/test-token` in Swagger |
-| `BACKEND_CORS_ORIGINS` | `[]` | Allowed CORS origins (JSON array) |
+| `BACKEND_CORS_ORIGINS` | (see `config.py`) | Allowed CORS origins; override via env as needed for your deployment |
 
 <Aside type="caution">
   Never set `ENABLE_TEST_TOKEN_ENDPOINT=true` in production — it allows anyone to generate API keys via the web UI.

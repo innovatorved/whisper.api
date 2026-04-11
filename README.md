@@ -61,7 +61,7 @@ python -m app.cli init
 python -m app.cli create --name "MyAdminKey"
 ```
 
-*Note: For testing purposes, you can enable a public token generation endpoint in the Swagger UI (`/docs`) by setting `ENABLE_TEST_TOKEN_ENDPOINT=true` in your `.env` file.*
+*Note: For **local testing only**, you can enable `POST /v1/auth/test-token` in Swagger by setting `ENABLE_TEST_TOKEN_ENDPOINT=true`. It defaults to **off**; never enable it in production.*
 
 ### 3. Start the Server
 ```bash
@@ -84,6 +84,7 @@ curl -X POST 'http://localhost:7860/v1/listen' \
   -d '{"url": "https://example.com/audio.mp3"}'
 ```
 
+The server fetches the URL for you with **SSRF protections** (public hosts only, size limits; redirects off by default). See `docs/` or `.env.example` for `MAX_AUDIO_DOWNLOAD_BYTES`, `AUDIO_URL_FOLLOW_REDIRECTS`, and related settings.
 
 ---
 

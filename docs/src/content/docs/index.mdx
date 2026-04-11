@@ -54,8 +54,8 @@ Client (cURL / Python / JS / Deepgram SDK)
 FastAPI Server (:7860)
   ├── /v1/listen     POST   → Transcribe uploaded file or URL
   ├── /v1/listen     WS     → Real-time streaming transcription
-  ├── /v1/models     GET    → List available GGML models
-  └── /v1/auth       POST   → Test token generation (dev only)
+  ├── /v1/models     GET    → List available GGML models (no auth)
+  └── /v1/auth/test-token POST → Mint API key (dev only; disabled by default)
   │
   ▼  subprocess
 whisper-cli (compiled from whisper.cpp)

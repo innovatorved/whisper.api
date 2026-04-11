@@ -21,7 +21,7 @@ WS /v1/listen
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `token` | `string` | — | **Required.** Your API key |
-| `model` | `string` | `tiny.en` | Model to use for transcription |
+| `model` | `string` | `tiny.en` | Model to use — must be a `model_id` from `GET /v1/models` (unknown values close the socket) |
 | `language` | `string` | `en` | BCP-47 language code |
 | `encoding` | `string` | `linear16` | Audio encoding format |
 | `sample_rate` | `integer` | `16000` | PCM sample rate in Hz |
@@ -41,6 +41,10 @@ WS /v1/listen
 
 <Aside type="tip">
   For browser clients using `MediaRecorder` or the Deepgram JavaScript SDK, use `encoding=auto` or `encoding=webm` so the server decodes compressed chunks before transcription.
+</Aside>
+
+<Aside type="note">
+  For **PCM** streams, the server fills an internal buffer until roughly `STREAM_CHUNK_DURATION_MS` of audio at your **`sample_rate`** (16-bit mono), then runs transcription. Match `sample_rate` to the audio you send (often `16000` or `48000`).
 </Aside>
 
 ---
@@ -184,7 +188,7 @@ As audio is buffered and processed, the server streams JSON results:
 ```
 
 <Aside type="note">
-  The `is_final` field indicates whether this is a finalized segment. The `from_finalize` field is `true` for the last result sent when the stream is closed.
+  The `is_final` field indicates whether this is a finalized segment. The `from_finalize` field is reserved for Deepgram compatibility and is currently always `false` in responses.
 </Aside>
 
 ---
@@ -210,7 +214,7 @@ Signals the server to process any remaining buffered audio and gracefully close 
 ```
 
 <Aside type="tip">
-  Always send a `CloseStream` message before disconnecting to ensure the final audio buffer is transcribed. The server will send any remaining results with `"from_finalize": true`.
+  Always send a `CloseStream` message before disconnecting so the server transcribes any audio still in the buffer and sends a final `Results` message if applicable.
 </Aside>
 
 ---
@@ -230,7 +234,7 @@ Signals the server to process any remaining buffered audio and gracefully close 
                      └──────────────┘
 ```
 
-The buffer accumulates audio for the configured `STREAM_CHUNK_DURATION_MS` (default: 5000ms) before processing each segment.
+The buffer accumulates audio for the configured `STREAM_CHUNK_DURATION_MS` (default **2000** ms in `config.py`) before processing each PCM segment; effective byte threshold scales with `sample_rate`.
 
 ---
 
@@ -273,6 +277,6 @@ python examples/mic_transcription.py --list-devices
 | Issue | Solution |
 |-------|----------|
 | **Empty transcriptions** | Ensure audio is 16kHz mono PCM. Check `encoding` parameter matches actual format. |
-| **Connection rejected** | Verify your API token is valid and passed as `?token=...` query parameter. |
+| **Connection rejected** | Verify your API token: query `?token=...`, `Authorization: Token ...`, or subprotocol pairs (see [Authentication](/authentication/)). Unknown `model` closes with code `4002`. |
 | **High latency** | Use `linear16` encoding and smaller `STREAM_CHUNK_DURATION_MS` (e.g., 2000). |
 | **Garbled output** | Check sample rate matches. Use `encoding=auto` for non-PCM formats. |
