@@ -35,11 +35,6 @@ from fastapi import (
 )
 from fastapi.responses import PlainTextResponse
 
-from app.api.models.listen import (
-    ListenResponse,
-    StreamingResult,
-    URLRequest,
-)
 from app.core.config import settings
 from app.core.database import get_db
 from sqlalchemy.orm import Session
@@ -287,10 +282,10 @@ async def listen_pre_recorded(
             # ── URL-based transcription ──
             body = await request.json()
             url = body.get("url")
-            if not url:
+            if not url or not isinstance(url, str):
                 raise HTTPException(
                     status_code=400,
-                    detail="Request body must contain 'url' field",
+                    detail="Request body must contain a string 'url' field",
                 )
             audio_path = await download_audio_from_url(url)
             needs_conversion = True
@@ -305,6 +300,12 @@ async def listen_pre_recorded(
                     detail="No file found in multipart form data. Send file with key 'file'.",
                 )
             audio_bytes = await file.read()
+            max_upload = settings.MAX_AUDIO_UPLOAD_BYTES
+            if len(audio_bytes) > max_upload:
+                raise HTTPException(
+                    status_code=413,
+                    detail="Audio exceeds maximum upload size",
+                )
             # Determine extension from filename or content type
             filename = getattr(file, "filename", "upload.wav") or "upload.wav"
             ext = filename.rsplit(".", 1)[-1] if "." in filename else "wav"
@@ -318,6 +319,12 @@ async def listen_pre_recorded(
                 raise HTTPException(
                     status_code=400,
                     detail="Empty audio body",
+                )
+            max_upload = settings.MAX_AUDIO_UPLOAD_BYTES
+            if len(audio_bytes) > max_upload:
+                raise HTTPException(
+                    status_code=413,
+                    detail="Audio exceeds maximum upload size",
                 )
             # Map content type to extension
             ext_map = {
@@ -438,6 +445,10 @@ async def listen_streaming(
         await websocket.close(code=4001, reason="Invalid or revoked API key")
         return
 
+    if model not in model_names:
+        await websocket.close(code=4002, reason="Unknown model")
+        return
+
     accepted_subprotocol = select_ws_subprotocol(websocket)
     await websocket.accept(subprotocol=accepted_subprotocol)
     if accepted_subprotocol:
@@ -464,9 +475,11 @@ async def listen_streaming(
     total_duration = 0.0
     chunks_processed = 0
 
-    # Calculate buffer threshold (bytes for N seconds of 16kHz 16-bit mono)
+    # Bytes for N seconds at the client's PCM sample rate (16-bit mono)
     chunk_duration_s = settings.STREAM_CHUNK_DURATION_MS / 1000.0
-    buffer_threshold = int(STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH * STREAM_CHANNELS * chunk_duration_s)
+    buffer_threshold = int(
+        sample_rate * STREAM_SAMPLE_WIDTH * STREAM_CHANNELS * chunk_duration_s
+    )
 
     logger.info(
         f"[WS:{request_id}] Session started. "
@@ -547,10 +560,11 @@ async def listen_streaming(
                 audio_buffer.extend(audio_bytes)
 
                 # Log every ~1 second of incoming audio
+                bytes_per_sec = max(sample_rate * STREAM_SAMPLE_WIDTH * STREAM_CHANNELS, 1)
                 if len(audio_buffer) % 32768 < len(audio_bytes):
                     logger.debug(
                         f"[WS:{request_id}] Audio buffer: {len(audio_buffer)}/{buffer_threshold} bytes "
-                        f"({len(audio_buffer) / (STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH):.1f}s)"
+                        f"({len(audio_buffer) / bytes_per_sec:.1f}s @ {sample_rate}Hz)"
                     )
 
                 # Process when buffer reaches threshold

@@ -60,9 +60,20 @@ def test_listen_url_request():
         headers={"Authorization": f"Token {token}"},
         json={"url": "https://example.com/audio.wav"}
     )
-    # Fails because download will fail (invalid URL), but passes auth and model validation
+    # Fails on URL ingest (HTTP error, DNS, or policy) after auth and model validation
     assert response.status_code == 400
-    assert "Failed to download audio" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert isinstance(detail, str)
+    assert any(
+        phrase in detail
+        for phrase in (
+            "Failed to download audio",
+            "Could not resolve audio URL",
+            "Invalid audio URL",
+            "Audio URL must use http",
+            "not allowed for security",
+        )
+    )
 
 
 def test_listen_websocket_with_query_token_connects():

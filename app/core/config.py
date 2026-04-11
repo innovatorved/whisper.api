@@ -59,6 +59,22 @@ class Settings(BaseSettings):
         env.get("STREAM_CHUNK_DURATION_MS", 2000)
     )
 
+    # ── Audio limits & subprocess timeouts (production safety) ───
+    MAX_AUDIO_UPLOAD_BYTES: int = int(
+        env.get("MAX_AUDIO_UPLOAD_BYTES", str(50 * 1024 * 1024))
+    )
+    MAX_AUDIO_DOWNLOAD_BYTES: int = int(
+        env.get("MAX_AUDIO_DOWNLOAD_BYTES", str(50 * 1024 * 1024))
+    )
+    # When False, URL fetch does not follow redirects (mitigates SSRF via redirect chains).
+    AUDIO_URL_FOLLOW_REDIRECTS: bool = (
+        env.get("AUDIO_URL_FOLLOW_REDIRECTS", "false").lower() == "true"
+    )
+    WHISPER_CLI_TIMEOUT_SEC: float = float(
+        env.get("WHISPER_CLI_TIMEOUT_SEC", "3600")
+    )
+    FFMPEG_TIMEOUT_SEC: float = float(env.get("FFMPEG_TIMEOUT_SEC", "600"))
+
     # ── Validators ─────────────────────────────────────────────────
 
     @field_validator("SECRET_KEY")

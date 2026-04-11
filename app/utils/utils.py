@@ -7,24 +7,27 @@ then transforms the output into Deepgram-compatible response structures.
 
 import asyncio
 import hashlib
+import ipaddress
 import json
 import logging
 import os
 import re
-import struct
+import socket
 import subprocess
-import tempfile
 import urllib
 import shlex
 import uuid
 import wave
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from urllib.parse import urlparse
 
 import gdown
 import httpx
 from fastapi import HTTPException
 from tqdm import tqdm
+
+from app.core.config import settings
 
 from .constant import (
     STREAM_CHANNELS,
@@ -39,14 +42,98 @@ logger = logging.getLogger(__name__)
 
 # ─── Paths ────────────────────────────────────────────────────────────
 
-WHISPER_BINARY = os.environ.get("WHISPER_BINARY_PATH", "./binary/whisper-cli")
-MODELS_DIR = os.environ.get("MODELS_DIR", "./models")
 AUDIO_DIR = "audio"
 TRANSCRIBE_DIR = "transcribe"
 
 # Ensure directories exist
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(TRANSCRIBE_DIR, exist_ok=True)
+
+_METADATA_IP = ipaddress.ip_address("169.254.169.254")
+
+
+def _ip_is_public_facing(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
+    if ip.is_private or ip.is_loopback or ip.is_link_local:
+        return False
+    if ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+        return False
+    if ip == _METADATA_IP:
+        return False
+    if ip.version == 6 and ip in ipaddress.ip_network("fc00::/7"):
+        return False
+    return True
+
+
+def _validate_hostname_is_public(hostname: str) -> None:
+    """Reject hosts that resolve to non-public addresses (SSRF mitigation)."""
+    if not hostname:
+        raise HTTPException(status_code=400, detail="Invalid URL hostname")
+
+    host_lower = hostname.strip().lower()
+    blocked_exact = {
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "::1",
+    }
+    if host_lower in blocked_exact or host_lower.endswith(".localhost"):
+        raise HTTPException(
+            status_code=400,
+            detail="URL host is not allowed for security reasons",
+        )
+
+    try:
+        parsed_ip = ipaddress.ip_address(hostname)
+        if not _ip_is_public_facing(parsed_ip):
+            raise HTTPException(
+                status_code=400,
+                detail="URL host is not allowed for security reasons",
+            )
+        return
+    except ValueError:
+        pass
+
+    try:
+        addrinfos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not resolve audio URL hostname",
+        ) from None
+
+    if not addrinfos:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not resolve audio URL hostname",
+        )
+
+    for _fam, _skt, _proto, _canon, sockaddr in addrinfos:
+        ip_str = sockaddr[0]
+        try:
+            resolved = ipaddress.ip_address(ip_str)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid IP in DNS resolution for URL host",
+            ) from exc
+        if not _ip_is_public_facing(resolved):
+            raise HTTPException(
+                status_code=400,
+                detail="URL host is not allowed for security reasons",
+            )
+
+
+def _validate_audio_fetch_url(url: str) -> None:
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(
+            status_code=400,
+            detail="Audio URL must use http or https",
+        )
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(status_code=400, detail="Invalid audio URL")
+    _validate_hostname_is_public(hostname)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -73,7 +160,7 @@ async def transcribe_audio(
     Returns the parsed JSON dictionary OR raw subtitle text (SRT/VTT).
     """
     model_file = get_model_filename(model)
-    model_path = os.path.join(MODELS_DIR, model_file)
+    model_path = os.path.join(settings.MODELS_DIR, model_file)
 
     if not os.path.exists(model_path):
         raise HTTPException(
@@ -85,13 +172,17 @@ async def transcribe_audio(
     request_id = str(uuid.uuid4())
     output_base = os.path.join(TRANSCRIBE_DIR, request_id)
 
-    # Build whisper-cli command
-    cmd_parts = [
-        WHISPER_BINARY,
-        "-m", model_path,
-        "-f", audio_path,
-        "-t", str(threads),
-        "-of", output_base,             # output file base
+    # Build whisper-cli argv (no shell — avoids injection via paths or prompt)
+    cmd_parts: List[str] = [
+        settings.WHISPER_BINARY_PATH,
+        "-m",
+        model_path,
+        "-f",
+        audio_path,
+        "-t",
+        str(threads),
+        "-of",
+        output_base,
     ]
 
     # Output format
@@ -104,10 +195,10 @@ async def transcribe_audio(
     else:
         cmd_parts.append("-oj")
         output_ext = ".json"
-        
+
     # Language
     if detect_language:
-        cmd_parts.extend(["-dl"])       # detect language
+        cmd_parts.append("-dl")
     else:
         whisper_lang = supported_languages.get(language, "en")
         cmd_parts.extend(["-l", whisper_lang])
@@ -119,38 +210,51 @@ async def transcribe_audio(
     # Diarize (stereo audio)
     if diarize:
         cmd_parts.append("-di")
-        
+
     # Advanced features
-    if prompt:
-        cmd_parts.extend(["--prompt", f"\"{prompt}\""])
+    if prompt is not None and prompt != "":
+        cmd_parts.extend(["--prompt", prompt])
     if start_ms is not None:
         cmd_parts.extend(["-ot", str(start_ms)])
     if duration_ms is not None:
         cmd_parts.extend(["-d", str(duration_ms)])
 
-    command = " ".join(cmd_parts)
     logger.info(
         f"[{request_id}] Starting transcription "
         f"(model={model}, format={response_format}, translate={translate}, detect_language={detect_language})"
     )
     logger.debug(f"[{request_id}] whisper-cli argv: {shlex.join(cmd_parts)}")
-    
+
     start_time_exec = asyncio.get_event_loop().time()
-    stdout, stderr, code = await execute_command(command)
+    stdout, stderr, code = await execute_command(
+        cmd_parts, timeout=settings.WHISPER_CLI_TIMEOUT_SEC
+    )
     end_time_exec = asyncio.get_event_loop().time()
-    
-    duration = end_time_exec - start_time_exec
-    logger.info(f"[{request_id}] Transcription finished in {duration:.2f}s (exit_code={code}).")
+
+    exec_wall = end_time_exec - start_time_exec
+    logger.info(
+        f"[{request_id}] Transcription finished in {exec_wall:.2f}s (exit_code={code})."
+    )
 
     # Read output
     out_path = f"{output_base}{output_ext}"
+    if code != 0:
+        logger.error(
+            f"[{request_id}] whisper-cli failed (exit_code={code}). stderr: {stderr[:2000]}"
+        )
+        _cleanup_files(output_base)
+        raise HTTPException(
+            status_code=500,
+            detail="Transcription failed",
+        )
+
     if not os.path.exists(out_path):
         logger.error(f"[{request_id}] Output file {out_path} missing after whisper-cli execution.")
         logger.debug(f"[{request_id}] whisper-cli stdout: {stdout}")
         logger.debug(f"[{request_id}] whisper-cli stderr: {stderr}")
         raise HTTPException(
             status_code=500,
-            detail=f"Transcription failed: output missing. Error: {stderr}",
+            detail="Transcription failed: output missing",
         )
 
     if response_format in ("srt", "vtt"):
@@ -335,25 +439,50 @@ async def download_audio_from_url(url: str) -> str:
     Download an audio file from a URL.
     Returns the local file path.
     """
+    if not isinstance(url, str) or not url.strip():
+        raise HTTPException(status_code=400, detail="Invalid URL")
+
+    _validate_audio_fetch_url(url)
+    max_bytes = settings.MAX_AUDIO_DOWNLOAD_BYTES
+
+    timeout = httpx.Timeout(60.0, connect=10.0)
     try:
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-            response = await client.get(url)
-            response.raise_for_status()
+        async with httpx.AsyncClient(
+            timeout=timeout,
+            follow_redirects=settings.AUDIO_URL_FOLLOW_REDIRECTS,
+        ) as client:
+            async with client.stream("GET", url) as response:
+                if settings.AUDIO_URL_FOLLOW_REDIRECTS and response.url.host:
+                    _validate_hostname_is_public(response.url.host)
+                response.raise_for_status()
 
-            # Determine extension from content type or URL
-            content_type = response.headers.get("content-type", "")
-            ext = _content_type_to_ext(content_type, url)
+                content_type = response.headers.get("content-type", "")
+                ext = _content_type_to_ext(content_type, url)
+                path = os.path.join(AUDIO_DIR, f"{uuid.uuid4()}.{ext}")
 
-            path = os.path.join(AUDIO_DIR, f"{uuid.uuid4()}.{ext}")
-            with open(path, "wb") as f:
-                f.write(response.content)
+                total = 0
+                with open(path, "wb") as outfile:
+                    async for chunk in response.aiter_bytes(chunk_size=65536):
+                        total += len(chunk)
+                        if total > max_bytes:
+                            try:
+                                os.remove(path)
+                            except OSError:
+                                pass
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Downloaded audio exceeds maximum allowed size",
+                            )
+                        outfile.write(chunk)
 
-            return path
-    except httpx.HTTPError as e:
+                return path
+    except HTTPException:
+        raise
+    except httpx.HTTPError:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to download audio from URL: {str(e)}",
-        )
+            detail="Failed to download audio from URL",
+        ) from None
 
 
 async def convert_audio_to_wav(input_path: str) -> str:
@@ -362,41 +491,68 @@ async def convert_audio_to_wav(input_path: str) -> str:
     Returns the path to the converted WAV file.
     """
     output_path = os.path.join(AUDIO_DIR, f"{uuid.uuid4()}.wav")
-    command = (
-        f"ffmpeg -y -i {input_path} -ar 16000 -ac 1 -c:a pcm_s16le {output_path}"
-    )
+    argv = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        input_path,
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-c:a",
+        "pcm_s16le",
+        output_path,
+    ]
 
     try:
-        stdout, stderr, code = await execute_command(command)
+        stdout, stderr, code = await execute_command(
+            argv, timeout=settings.FFMPEG_TIMEOUT_SEC
+        )
         if code != 0:
-            logger.error(f"ffmpeg conversion failed with code {code}: {stderr}")
+            logger.error("ffmpeg conversion failed with code %s: %s", code, stderr[:2000])
             raise HTTPException(
                 status_code=500,
-                detail=f"Audio conversion failed: {stderr}",
+                detail="Audio conversion failed",
             )
         return output_path
     except Exception as e:
         # Don't fall back to original file because whisper-cli (this build) requires WAV
         if isinstance(e, HTTPException):
             raise
-        logger.error(f"Error during audio conversion: {e}")
+        logger.error("Error during audio conversion: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Error executing audio conversion: {str(e)}",
-        )
+            detail="Audio conversion failed",
+        ) from e
 
 
 def get_audio_duration(audio_file: str) -> float:
     """Gets the duration of the audio file in seconds using ffprobe."""
     try:
-        command = (
-            f"ffprobe -v error -show_entries format=duration "
-            f"-of default=noprint_wrappers=1:nokey=1 {audio_file}"
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                audio_file,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
         )
-        duration = subprocess.check_output(command, shell=True).decode("utf-8").strip()
+        if result.returncode != 0:
+            logger.error("ffprobe failed: %s", result.stderr.strip()[:500])
+            return 0.0
+        duration = result.stdout.strip()
         return float(duration)
-    except Exception as e:
-        logger.error(f"Error getting duration: {e}")
+    except (ValueError, subprocess.TimeoutExpired, OSError) as e:
+        logger.error("Error getting duration: %s", e)
         return 0.0
 
 
@@ -432,8 +588,10 @@ def get_model_filename(model: str) -> str:
     """Get the model binary filename from user-friendly model name."""
     if model in model_names:
         return model_names[model]
-    # Default to tiny.en.q5
-    return model_names.get("tiny.en.q5", "ggml-model-whisper-tiny.en-q5_1.bin")
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unknown model '{model}'",
+    )
 
 
 def get_model_name(model: str = None) -> str:
@@ -445,7 +603,7 @@ def list_available_models() -> list:
     """List all available models with metadata."""
     available = []
     for key, filename in model_names.items():
-        model_path = os.path.join(MODELS_DIR, filename)
+        model_path = os.path.join(settings.MODELS_DIR, filename)
         if os.path.exists(model_path):
             info = model_info.get(key, {})
             available.append({
@@ -465,24 +623,45 @@ def list_available_models() -> list:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-async def execute_command(command: str) -> Tuple[str, str, int]:
+async def execute_command(
+    argv: Sequence[str],
+    timeout: Optional[float] = None,
+) -> Tuple[str, str, int]:
     """
-    Execute a shell command asynchronously.
+    Execute a subprocess asynchronously without a shell.
     Returns (stdout, stderr, returncode).
     """
     try:
-        process = await asyncio.create_subprocess_shell(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        process = await asyncio.create_subprocess_exec(
+            *argv,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await process.communicate()
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(
+                process.communicate(),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            raise HTTPException(
+                status_code=504,
+                detail="Audio processing timed out",
+            ) from None
 
-        return stdout.decode("utf-8").strip(), stderr.decode("utf-8").strip(), process.returncode
+        stdout = stdout_b.decode("utf-8", errors="replace").strip()
+        stderr = stderr_b.decode("utf-8", errors="replace").strip()
+        code = process.returncode if process.returncode is not None else -1
+        return stdout, stderr, code
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.error(f"Command execution error: {exc}")
+        logger.error("Command execution error: %s", exc)
         raise HTTPException(
             status_code=500,
-            detail=f"Error executing command: {str(exc)}",
-        )
+            detail="Error executing audio processor",
+        ) from exc
 
 
 # ═══════════════════════════════════════════════════════════════════════
