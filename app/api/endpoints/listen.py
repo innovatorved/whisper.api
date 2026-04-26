@@ -408,6 +408,27 @@ async def listen_pre_recorded(
 MIN_AUDIO_BYTES = int(STREAM_SAMPLE_RATE * STREAM_SAMPLE_WIDTH * 0.5)
 
 
+def _fmt_ts(seconds: float) -> str:
+    """Format a duration in seconds as `mm:ss.mmm` for human-friendly logs."""
+    try:
+        s = max(float(seconds), 0.0)
+    except (TypeError, ValueError):
+        return "00:00.000"
+    minutes = int(s // 60)
+    rem = s - minutes * 60
+    return f"{minutes:02d}:{rem:06.3f}"
+
+
+def _fmt_range(start: float, duration: float) -> str:
+    """Format `[mm:ss.mmm → mm:ss.mmm]` for a transcript window."""
+    try:
+        s = float(start)
+        d = float(duration)
+    except (TypeError, ValueError):
+        return "[00:00.000 → 00:00.000]"
+    return f"[{_fmt_ts(s)} → {_fmt_ts(s + d)}]"
+
+
 @router.websocket("")
 async def listen_streaming(
     websocket: WebSocket,
@@ -471,15 +492,35 @@ async def listen_streaming(
         return
 
     audio_buffer = bytearray()
+    # For container streams (webm/ogg/opus/mp4) we cannot decode arbitrary
+    # mid-stream slices in isolation: clusters/pages/boxes only make sense
+    # relative to the stream start. So we accumulate the full container stream
+    # and re-decode it from the beginning on every window. To keep memory and
+    # CPU bounded for long sessions, we cap the cumulative buffer at
+    # CONTAINER_BUFFER_MAX_SECONDS / CONTAINER_BUFFER_MAX_BYTES.
+    container_buffer = bytearray()
+    container_format: Optional[str] = None
+    # `committed_audio_seconds` marks the boundary up to which we have
+    # already emitted a finalized (is_final=True) transcript for the client.
+    # Each window we promote any whisper segment that ends before
+    # (full_duration - STABILITY_LAG_SECONDS) into a finalized message,
+    # advancing this watermark. The remaining tail is sent as interim
+    # (is_final=False) and the client should replace its interim each window.
+    committed_audio_seconds = 0.0
     chunk_start_time = 0.0
     total_duration = 0.0
     chunks_processed = 0
+    is_container_stream = False
+    last_container_process_ts = 0.0
 
-    # Bytes for N seconds at the client's PCM sample rate (16-bit mono)
-    chunk_duration_s = settings.STREAM_CHUNK_DURATION_MS / 1000.0
+    chunk_duration_s = max(settings.STREAM_CHUNK_DURATION_MS / 1000.0, 0.05)
+    # PCM uses a byte-count threshold (raw size is predictable); container
+    # streams use a wall-clock cadence (compressed bitrate is unknown).
     buffer_threshold = int(
         sample_rate * STREAM_SAMPLE_WIDTH * STREAM_CHANNELS * chunk_duration_s
     )
+    CONTAINER_BUFFER_MAX_SECONDS = 60.0
+    CONTAINER_BUFFER_MAX_BYTES = 8 * 1024 * 1024
 
     logger.info(
         f"[WS:{request_id}] Session started. "
@@ -527,22 +568,65 @@ async def listen_streaming(
                     msg_type = msg.get("type", "")
 
                     if msg_type == "CloseStream":
-                        logger.info(f"[WS:{request_id}] CloseStream received. Buffer: {len(audio_buffer)} bytes")
-                        # Process any remaining buffer before closing
-                        if len(audio_buffer) > 0:
+                        pcm_left = len(audio_buffer)
+                        ctnr_left = len(container_buffer)
+                        logger.info(
+                            f"[WS:{request_id}] CloseStream received. "
+                            f"PCM buffer: {pcm_left} bytes, container buffer: {ctnr_left} bytes"
+                        )
+                        if is_container_stream and ctnr_left > 0:
+                            window = await _process_container_window_safe(
+                                bytes(container_buffer),
+                                container_format or "webm",
+                                request_id, model, language,
+                                translate, diarize, detect_language,
+                                committed_audio_seconds,
+                                is_final=True, speech_final=True,
+                            )
+                            err = window.get("error")
+                            if err:
+                                for k in ("_full_duration", "_new_committed", "_final_msg", "_interim_msg"):
+                                    window.pop(k, None)
+                                await websocket.send_json(window)
+                            else:
+                                final_msg = window.pop("_final_msg", None)
+                                # On close, the entire remaining tail is final.
+                                if final_msg is not None:
+                                    ftxt = (
+                                        final_msg.get("channel", {})
+                                                 .get("alternatives", [{}])[0]
+                                                 .get("transcript", "")
+                                    )
+                                    logger.info(
+                                        f"[WS:{request_id}] [FINAL-close] "
+                                        f"{_fmt_range(final_msg.get('start', 0), final_msg.get('duration', 0))} "
+                                        f"chars={len(ftxt)}"
+                                    )
+                                    final_msg["speech_final"] = True
+                                    await websocket.send_json(final_msg)
+                                    committed_audio_seconds = float(
+                                        window.get("_new_committed", committed_audio_seconds)
+                                    )
+                            chunks_processed += 1
+                        elif (not is_container_stream) and pcm_left > 0:
                             result = await _process_stream_chunk_safe(
                                 bytes(audio_buffer), request_id, model, language,
                                 translate, diarize, detect_language,
                                 chunk_start_time, requested_encoding, sample_rate,
                                 is_final=True, speech_final=True,
                             )
+                            ptxt = (
+                                result.get("channel", {})
+                                      .get("alternatives", [{}])[0]
+                                      .get("transcript", "")
+                            )
+                            logger.info(
+                                f"[WS:{request_id}] [FINAL-close-PCM] "
+                                f"{_fmt_range(result.get('start', 0), result.get('duration', 0))} "
+                                f"chars={len(ptxt)}"
+                            )
                             await websocket.send_json(result)
                             chunks_processed += 1
-                        else:
-                            logger.info(
-                                f"[WS:{request_id}] Remaining buffer too small "
-                                f"({len(audio_buffer)} bytes), skipping"
-                            )
                         break
 
                     elif msg_type == "KeepAlive":
@@ -555,51 +639,169 @@ async def listen_streaming(
                     logger.warning(f"[WS:{request_id}] Non-JSON text received: {text_data[:100]}")
 
             elif "bytes" in data:
-                # Audio data received
                 audio_bytes = data["bytes"]
-                audio_buffer.extend(audio_bytes)
 
-                # Log every ~1 second of incoming audio
-                bytes_per_sec = max(sample_rate * STREAM_SAMPLE_WIDTH * STREAM_CHANNELS, 1)
-                if len(audio_buffer) % 32768 < len(audio_bytes):
-                    logger.debug(
-                        f"[WS:{request_id}] Audio buffer: {len(audio_buffer)}/{buffer_threshold} bytes "
-                        f"({len(audio_buffer) / bytes_per_sec:.1f}s @ {sample_rate}Hz)"
+                # Decide PCM vs container path on the FIRST binary frame.
+                if not is_container_stream and container_format is None:
+                    detected = detect_stream_chunk_format(bytes(audio_bytes[:64]))
+                    requested_norm = (requested_encoding or "linear16").strip().lower()
+                    treat_as_container = (
+                        requested_norm in STREAM_CONTAINER_ENCODINGS
+                        or (requested_norm == "auto" and detected in STREAM_CONTAINER_ENCODINGS)
+                        or (requested_norm in PCM_STREAM_ENCODINGS and detected in STREAM_CONTAINER_ENCODINGS)
                     )
-
-                # Process when buffer reaches threshold
-                if len(audio_buffer) >= buffer_threshold:
-                    chunk_size = len(audio_buffer)
-                    logger.info(f"[WS:{request_id}] Processing chunk #{chunks_processed + 1} ({chunk_size} bytes)")
-
-                    chunk_data = bytes(audio_buffer)
-                    audio_buffer.clear()
-
-                    result = await _process_stream_chunk_safe(
-                        chunk_data, request_id, model, language,
-                        translate, diarize, detect_language,
-                        chunk_start_time, requested_encoding, sample_rate,
-                        is_final=True, speech_final=False,
-                    )
-
-                    chunk_duration = float(result.get("duration", 0.0))
-                    chunk_start_time += chunk_duration
-                    total_duration += chunk_duration
-                    chunks_processed += 1
-
-                    # Log the result
-                    transcript = result.get("channel", {}).get("alternatives", [{}])[0].get("transcript", "")
-                    err = result.get("error")
-                    if err:
-                        logger.error(f"[WS:{request_id}] Chunk #{chunks_processed} error: {err}")
-                    else:
-                        logger.info(
-                            f"[WS:{request_id}] Chunk #{chunks_processed} complete "
-                            f"(transcript_chars={len(transcript)})"
+                    if treat_as_container:
+                        is_container_stream = True
+                        container_format = (
+                            detected if detected in STREAM_CONTAINER_ENCODINGS
+                            else (requested_norm if requested_norm in STREAM_CONTAINER_ENCODINGS else "webm")
                         )
-                        logger.debug(f"[WS:{request_id}] Chunk #{chunks_processed} transcript: '{transcript}'")
+                        logger.info(
+                            f"[WS:{request_id}] Container stream detected (format={container_format}, "
+                            f"requested={requested_norm}). Using cumulative-decode strategy."
+                        )
 
-                    await websocket.send_json(result)
+                if is_container_stream:
+                    container_buffer.extend(audio_bytes)
+
+                    # Drop oldest bytes if the cumulative buffer exceeds the cap.
+                    # When this happens we lose the original header, so we also
+                    # have to reset the stream baseline and accept transcript
+                    # discontinuity. In practice this only kicks in for very
+                    # long sessions (>~60s of compressed audio).
+                    if len(container_buffer) > CONTAINER_BUFFER_MAX_BYTES:
+                        logger.warning(
+                            f"[WS:{request_id}] Container buffer exceeded "
+                            f"{CONTAINER_BUFFER_MAX_BYTES} bytes; truncating from front. "
+                            f"Long sessions should reconnect periodically."
+                        )
+                        container_buffer = bytearray(container_buffer[-CONTAINER_BUFFER_MAX_BYTES:])
+
+                    now = asyncio.get_event_loop().time()
+                    if (now - last_container_process_ts) >= chunk_duration_s:
+                        last_container_process_ts = now
+
+                        chunk_size = len(container_buffer)
+                        logger.info(
+                            f"[WS:{request_id}] Processing container window #{chunks_processed + 1} "
+                            f"(cumulative={chunk_size} bytes, committed_until={_fmt_ts(committed_audio_seconds)}, "
+                            f"format={container_format})"
+                        )
+
+                        window = await _process_container_window_safe(
+                            bytes(container_buffer),
+                            container_format or "webm",
+                            request_id, model, language,
+                            translate, diarize, detect_language,
+                            committed_audio_seconds,
+                            is_final=False, speech_final=False,
+                        )
+
+                        chunks_processed += 1
+                        full_duration = float(window.get("_full_duration", 0.0))
+                        new_committed = float(
+                            window.get("_new_committed", committed_audio_seconds)
+                        )
+                        if full_duration > CONTAINER_BUFFER_MAX_SECONDS:
+                            logger.warning(
+                                f"[WS:{request_id}] Cumulative audio exceeded "
+                                f"{CONTAINER_BUFFER_MAX_SECONDS}s; client should reconnect for best accuracy."
+                            )
+                        total_duration = full_duration
+
+                        err = window.get("error")
+                        if err:
+                            logger.error(
+                                f"[WS:{request_id}] Container window #{chunks_processed} error: {err}"
+                            )
+                            # Forward the error result and continue.
+                            for k in ("_full_duration", "_new_committed", "_final_msg", "_interim_msg"):
+                                window.pop(k, None)
+                            await websocket.send_json(window)
+                            continue
+
+                        final_msg = window.pop("_final_msg", None)
+                        interim_msg = window.pop("_interim_msg", None)
+                        for k in ("_full_duration", "_new_committed"):
+                            window.pop(k, None)
+
+                        if final_msg is not None:
+                            ftxt = (
+                                final_msg.get("channel", {})
+                                         .get("alternatives", [{}])[0]
+                                         .get("transcript", "")
+                            )
+                            logger.info(
+                                f"[WS:{request_id}] [FINAL] "
+                                f"{_fmt_range(final_msg.get('start', 0), final_msg.get('duration', 0))} "
+                                f"chars={len(ftxt)}"
+                            )
+                            await websocket.send_json(final_msg)
+                            committed_audio_seconds = new_committed
+
+                        if interim_msg is not None:
+                            itxt = (
+                                interim_msg.get("channel", {})
+                                           .get("alternatives", [{}])[0]
+                                           .get("transcript", "")
+                            )
+                            logger.info(
+                                f"[WS:{request_id}] [INTERIM] "
+                                f"{_fmt_range(interim_msg.get('start', 0), interim_msg.get('duration', 0))} "
+                                f"chars={len(itxt)}"
+                            )
+                            await websocket.send_json(interim_msg)
+
+                else:
+                    # PCM (linear16) path — slice-and-process is safe because raw
+                    # PCM has no container framing.
+                    audio_buffer.extend(audio_bytes)
+
+                    bytes_per_sec = max(sample_rate * STREAM_SAMPLE_WIDTH * STREAM_CHANNELS, 1)
+                    if len(audio_buffer) % 32768 < len(audio_bytes):
+                        logger.debug(
+                            f"[WS:{request_id}] PCM buffer: {len(audio_buffer)}/{buffer_threshold} bytes "
+                            f"({len(audio_buffer) / bytes_per_sec:.1f}s @ {sample_rate}Hz)"
+                        )
+
+                    if len(audio_buffer) >= buffer_threshold:
+                        chunk_size = len(audio_buffer)
+                        logger.info(
+                            f"[WS:{request_id}] Processing PCM chunk #{chunks_processed + 1} "
+                            f"({chunk_size} bytes)"
+                        )
+
+                        chunk_data = bytes(audio_buffer)
+                        audio_buffer.clear()
+
+                        result = await _process_stream_chunk_safe(
+                            chunk_data, request_id, model, language,
+                            translate, diarize, detect_language,
+                            chunk_start_time, requested_encoding, sample_rate,
+                            is_final=True, speech_final=False,
+                        )
+
+                        chunk_duration = float(result.get("duration", 0.0))
+                        chunk_start_time += chunk_duration
+                        total_duration += chunk_duration
+                        chunks_processed += 1
+
+                        ptxt = (
+                            result.get("channel", {})
+                                  .get("alternatives", [{}])[0]
+                                  .get("transcript", "")
+                        )
+                        err = result.get("error")
+                        if err:
+                            logger.error(f"[WS:{request_id}] PCM chunk #{chunks_processed} error: {err}")
+                        else:
+                            logger.info(
+                                f"[WS:{request_id}] [PCM-CHUNK #{chunks_processed}] "
+                                f"{_fmt_range(result.get('start', 0), chunk_duration)} "
+                                f"chars={len(ptxt)}"
+                            )
+
+                        await websocket.send_json(result)
 
             else:
                 # Check for WebSocket disconnect frame
@@ -630,7 +832,7 @@ async def listen_streaming(
     finally:
         logger.info(
             f"[WS:{request_id}] Session ended. "
-            f"Chunks processed: {chunks_processed}, Total duration: {total_duration:.2f}s"
+            f"chunks_processed={chunks_processed} total_audio={_fmt_ts(total_duration)}"
         )
 
 
@@ -800,3 +1002,237 @@ def _error_streaming_result(
     result = _empty_streaming_result(request_id, model, start_time, duration, is_final, speech_final)
     result["error"] = error_msg
     return result
+
+
+STABILITY_LAG_SECONDS = 3.0
+
+
+async def _process_container_window_safe(
+    cumulative_data: bytes,
+    container_format: str,
+    request_id: str,
+    model: str,
+    language: str,
+    translate: bool,
+    diarize: bool,
+    detect_language: bool,
+    committed_audio_seconds: float,
+    is_final: bool = False,
+    speech_final: bool = False,
+) -> dict:
+    """Decode the entire cumulative container stream and split the result
+    into a finalized portion and an interim tail.
+
+    Container formats (webm/ogg/opus/mp4) cannot be sliced mid-stream, so we
+    re-decode from start each window. This is bullet-proof: ffmpeg always
+    sees a valid stream.
+
+    To avoid the UI clobbering older text, we split each window's output:
+
+      * **Finalized** (is_final=True): segments that ended before
+        ``full_duration - STABILITY_LAG_SECONDS``. These are stable; whisper
+        is unlikely to revise them on later windows. Emitted with
+        ``start=committed_audio_seconds`` and a positive duration so the
+        client appends them to its committed transcript.
+      * **Interim** (is_final=False): the unfinalized tail covering the most
+        recent audio. The client should *replace* its current interim with
+        this each window.
+
+    On ``speech_final=True`` (CloseStream), the entire remaining transcript
+    becomes finalized — no interim is returned.
+    """
+    full_duration = 0.0
+    wav_path = None
+    source_path = None
+
+    try:
+        extension = STREAM_CONTAINER_ENCODINGS.get(container_format, "webm")
+        source_path = save_audio_bytes(cumulative_data, extension=extension)
+        wav_path = await convert_audio_to_wav(source_path)
+        full_duration = get_audio_duration(wav_path)
+
+        delta_duration = max(full_duration - committed_audio_seconds, 0.0)
+        min_full = 1.0
+        min_delta = 1.0 if not speech_final else 0.1
+        if full_duration < min_full or delta_duration < min_delta:
+            logger.info(
+                f"[WS:{request_id}] Skipping window: audio={_fmt_ts(full_duration)} "
+                f"(min={min_full}s), new={_fmt_ts(delta_duration)} (min={min_delta}s)"
+            )
+            return {
+                "_full_duration": full_duration,
+                "_new_committed": committed_audio_seconds,
+                "_final_msg": None,
+                "_interim_msg": None,
+            }
+
+        async with _transcription_semaphore:
+            whisper_json, _ = await transcribe_audio(
+                audio_path=wav_path,
+                model=model,
+                language=language,
+                translate=translate,
+                diarize=diarize,
+                detect_language=detect_language,
+            )
+
+        deepgram_response = parse_whisper_json_to_deepgram(
+            whisper_json=whisper_json,
+            request_id=request_id,
+            model=model,
+            audio_duration=full_duration,
+        )
+
+        channel_data = {}
+        if deepgram_response.get("results", {}).get("channels"):
+            channel_data = deepgram_response["results"]["channels"][0]
+
+        alts = channel_data.get("alternatives") or [{}]
+        first_alt = alts[0] if alts else {}
+        confidence = first_alt.get("confidence", 0.0)
+        all_words = first_alt.get("words") or []
+        full_transcript = (first_alt.get("transcript") or "").strip()
+        model_info_block = deepgram_response.get("metadata", {}).get("model_info", {})
+
+        # Split segments into finalized vs interim using STABILITY_LAG_SECONDS.
+        # On speech_final (close), everything becomes finalized.
+        committed_ms = int(committed_audio_seconds * 1000)
+        if speech_final:
+            stable_cutoff_ms = int(full_duration * 1000) + 1
+        else:
+            stable_cutoff_ms = max(
+                int((full_duration - STABILITY_LAG_SECONDS) * 1000),
+                committed_ms,
+            )
+
+        segments = whisper_json.get("transcription", []) or []
+        final_texts = []
+        interim_texts = []
+        final_end_ms = committed_ms
+        for seg in segments:
+            seg_offsets = seg.get("offsets", {}) or {}
+            seg_start_ms = int(seg_offsets.get("from", 0))
+            seg_end_ms = int(seg_offsets.get("to", 0))
+            seg_text = (seg.get("text") or "").strip()
+            if not seg_text:
+                continue
+            # Skip anything already committed (segment ends at/before commit).
+            if seg_end_ms <= committed_ms:
+                continue
+            if seg_end_ms <= stable_cutoff_ms:
+                final_texts.append(seg_text)
+                if seg_end_ms > final_end_ms:
+                    final_end_ms = seg_end_ms
+            else:
+                interim_texts.append(seg_text)
+
+        new_committed_seconds = max(
+            min(final_end_ms / 1000.0, full_duration),
+            committed_audio_seconds,
+        )
+
+        # When segment offsets are missing (e.g. very short clips), fall back
+        # to emitting everything as interim so the client still sees output.
+        if not segments and full_transcript and not speech_final:
+            interim_texts.append(full_transcript)
+
+        final_text = " ".join(final_texts).strip()
+        interim_text = " ".join(interim_texts).strip()
+
+        final_msg = None
+        if final_text:
+            final_msg = {
+                "type": "Results",
+                "channel_index": [0, 1],
+                "duration": round(new_committed_seconds - committed_audio_seconds, 2),
+                "start": round(committed_audio_seconds, 2),
+                "is_final": True,
+                "speech_final": bool(speech_final),
+                "channel": {
+                    "alternatives": [{
+                        "transcript": final_text,
+                        "confidence": confidence,
+                        "words": [
+                            w for w in all_words
+                            if committed_audio_seconds < float(w.get("end", 0.0)) <= new_committed_seconds
+                        ],
+                    }],
+                },
+                "metadata": {
+                    "request_id": request_id,
+                    "model_info": model_info_block,
+                },
+                "from_finalize": False,
+            }
+
+        interim_msg = None
+        if interim_text and not speech_final:
+            interim_msg = {
+                "type": "Results",
+                "channel_index": [0, 1],
+                "duration": round(full_duration - new_committed_seconds, 2),
+                "start": round(new_committed_seconds, 2),
+                "is_final": False,
+                "speech_final": False,
+                "channel": {
+                    "alternatives": [{
+                        "transcript": interim_text,
+                        "confidence": confidence,
+                        "words": [
+                            w for w in all_words
+                            if float(w.get("end", 0.0)) > new_committed_seconds
+                        ],
+                    }],
+                },
+                "metadata": {
+                    "request_id": request_id,
+                    "model_info": model_info_block,
+                },
+                "from_finalize": False,
+            }
+
+        return {
+            "_full_duration": full_duration,
+            "_new_committed": new_committed_seconds,
+            "_final_msg": final_msg,
+            "_interim_msg": interim_msg,
+        }
+
+    except HTTPException as e:
+        logger.error(f"[WS:{request_id}] Container window HTTPException: {e.detail}")
+        err = _error_streaming_result(
+            request_id, model, committed_audio_seconds,
+            max(full_duration - committed_audio_seconds, 0.0),
+            str(e.detail), is_final, speech_final,
+        )
+        err["_full_duration"] = full_duration
+        err["_new_committed"] = committed_audio_seconds
+        err["_final_msg"] = None
+        err["_interim_msg"] = None
+        return err
+    except Exception as e:
+        logger.error(
+            f"[WS:{request_id}] Unexpected error in container window: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        err = _error_streaming_result(
+            request_id, model, committed_audio_seconds,
+            max(full_duration - committed_audio_seconds, 0.0),
+            str(e), is_final, speech_final,
+        )
+        err["_full_duration"] = full_duration
+        err["_new_committed"] = committed_audio_seconds
+        err["_final_msg"] = None
+        err["_interim_msg"] = None
+        return err
+    finally:
+        if wav_path and os.path.exists(wav_path):
+            try:
+                os.remove(wav_path)
+            except OSError:
+                pass
+        if source_path and os.path.exists(source_path):
+            try:
+                os.remove(source_path)
+            except OSError:
+                pass
