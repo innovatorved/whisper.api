@@ -4,7 +4,7 @@ description: Complete reference for the Whisper API REST endpoints — parameter
 ---
 
 
-The Whisper API provides a **Deepgram-compatible** REST interface for pre-recorded audio transcription and model management.
+The Whisper API provides both a **Deepgram-compatible** REST & WebSocket interface (`/v1/listen`) and an **OpenAI-compatible** Audio API (`/v1/audio/transcriptions` and `/v1/audio/translations`) for pre-recorded audio transcription, translation, and model management.
 
 ---
 
@@ -12,30 +12,37 @@ The Whisper API provides a **Deepgram-compatible** REST interface for pre-record
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| <span class="badge badge-post">POST</span> | `/v1/listen` | Transcribe audio (file upload or URL) |
-| <span class="badge badge-get">GET</span> | `/v1/models` | List available models (no auth) |
+| <span class="badge badge-post">POST</span> | `/v1/listen` | Transcribe audio — Deepgram-compatible (file upload or URL) |
+| <span class="badge badge-post">POST</span> | `/v1/audio/transcriptions` | Transcribe audio — OpenAI-compatible (`multipart/form-data`) |
+| <span class="badge badge-post">POST</span> | `/v1/audio/translations` | Translate speech to English — OpenAI-compatible (`multipart/form-data`) |
+| <span class="badge badge-get">GET</span> | `/v1/models` | List available & registered models (no auth) |
 | <span class="badge badge-get">GET</span> | `/ping` | Health check |
 | <span class="badge badge-post">POST</span> | `/v1/auth/test-token` | Generate test token (dev only) |
 | <span class="badge badge-ws">WS</span> | `/v1/listen` | Live streaming (see [Streaming docs](/streaming/)) |
 
 ---
 
-## POST `/v1/listen` — Transcribe Audio
+## POST `/v1/listen` — Transcribe Audio (Deepgram-compatible)
 
-The primary transcription endpoint. Accepts audio either as a binary file upload or as a URL in a JSON body. Upload size is capped by `MAX_AUDIO_UPLOAD_BYTES` (default 50 MiB).
+The primary Deepgram-compatible transcription endpoint. Accepts audio either as a binary file upload or as a URL in a JSON body. Upload size is capped by `MAX_AUDIO_UPLOAD_BYTES` (default 50 MiB).
 
 ### Request Parameters (Query String)
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model` | `string` | `tiny.en` | Model to use. See `GET /v1/models` for options. |
-| `language` | `string` | `en` | BCP-47 language code for transcription. |
+| `model` | `string` | `tiny.en` | Model to use (`tiny.en`, `base.en.q5`, `large-v3-turbo.q5`, `whisper-1`, etc.). See `GET /v1/models`. |
+| `language` | `string` | `en` | BCP-47 language code for transcription (`en`, `es`, `fr`, `auto`, etc.). |
 | `prompt` | `string` | `null` | Context/vocabulary prompt to guide the model (e.g., `"TURNIPS, MUTTON"`). |
 | `start` | `integer` | `0` | Offset in **milliseconds** — skip audio before this point. |
 | `duration` | `integer` | `null` | Maximum duration in **milliseconds** to process. |
-| `response_format` | `string` | `json` | Response format: `json`, `srt`, or `vtt`. |
+| `response_format` | `string` | `json` | Response format: `json`, `srt`, `vtt`, or `text`. |
 | `diarize` | `boolean` | `false` | Enable speaker separation (best with stereo audio). |
 | `utterances` | `boolean` | `false` | Return speech interval metadata. |
+| `translate` | `boolean` | `false` | Translate source speech into English (`whisper-cli -tr`). |
+| `temperature` | `float` | `null` | Sampling temperature (`0.0` to `1.0`). |
+| `beam_size` | `integer` | `null` | Beam size for beam search decoding (`1` to `10`). |
+| `split_on_word` | `boolean` | `false` | Split segments on word boundaries rather than token boundaries (`-sow`). |
+| `vad` | `boolean` | `false` | Enable Silero Voice Activity Detection (`--vad`) to filter non-speech intervals. |
 
 ### Request Headers
 
@@ -155,6 +162,37 @@ ask not what your country can do for you
 
 00:00:06.800 --> 00:00:10.430
 ask what you can do for your country
+```
+
+---
+
+## POST `/v1/audio/transcriptions` & `/v1/audio/translations` — OpenAI Audio API
+
+Drop-in compatible with the OpenAI Audio API (`client.audio.transcriptions.create` and `client.audio.translations.create`). Accepts `Bearer <key>` or `Token <key>` in the `Authorization` header.
+
+### Form Fields (`multipart/form-data`)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `file` | `file` | *(required)* | Audio or video file to transcribe/translate (`wav`, `mp3`, `m4a`, `mp4`, `webm`, etc.). |
+| `model` | `string` | `whisper-1` | Model ID or alias (`whisper-1`, `tiny.en`, `large-v3-turbo.q5`, etc.). |
+| `language` | `string` | `auto` | ISO-639-1 language code (`en`, `fr`, `de`, etc.). |
+| `prompt` | `string` | `null` | Optional text prompt to guide style or vocabulary. |
+| `response_format` | `string` | `json` | One of `json`, `verbose_json`, `text`, `srt`, or `vtt`. |
+| `temperature` | `float` | `null` | Sampling temperature between `0.0` and `1.0`. |
+| `timestamp_granularities[]` | `string[]` | `["segment"]` | Include `"word"` and/or `"segment"` timestamps when `response_format=verbose_json`. |
+| `vad` | `boolean` | `false` | Enable Silero VAD (`silero-v6.2.0`) when installed. |
+
+### Example Request (`verbose_json` with Word Timestamps)
+
+```bash
+curl -X POST 'http://localhost:7860/v1/audio/transcriptions' \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -F "file=@audio/jfk.wav" \
+  -F "model=whisper-1" \
+  -F "response_format=verbose_json" \
+  -F "timestamp_granularities[]=word" \
+  -F "timestamp_granularities[]=segment"
 ```
 
 ---

@@ -104,12 +104,18 @@ Before you begin, make sure you have the following installed:
    The setup script clones, builds, and installs the `whisper-cli` binary:
 
    ```bash
+   # macOS & Linux
    chmod +x setup_whisper.sh
    ./setup_whisper.sh
    ```
 
+   ```powershell
+   # Windows (PowerShell)
+   .\setup_whisper.ps1
+   ```
+
    <Aside type="note">
-     The script automatically detects your platform (macOS/Linux), enables CUDA if an NVIDIA GPU is found, and downloads a default `tiny.en` model.
+     The script automatically detects your platform (**macOS Apple Silicon/Intel with Metal & Accelerate**, **Linux x86_64/ARM64/CUDA**, or **Windows MSVC/MinGW**), builds `whisper-cli`, and downloads the default `tiny.en` model.
    </Aside>
 
 6. **Initialize the Database & Create an API Key**

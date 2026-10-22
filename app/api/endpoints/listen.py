@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 from app.core.models.ApiKey import ApiKey
 from app.utils.constant import (
     DEFAULT_STREAM_CHUNK_DURATION_MS,
+    MODEL_ALIASES,
     STREAM_CHANNELS,
     STREAM_SAMPLE_RATE,
     STREAM_SAMPLE_WIDTH,
@@ -54,6 +55,7 @@ from app.utils.utils import (
     download_audio_from_url,
     get_audio_duration,
     parse_whisper_json_to_deepgram,
+    resolve_model_name,
     save_audio_bytes,
     transcribe_audio,
 )
@@ -253,7 +255,16 @@ async def listen_pre_recorded(
     prompt: Optional[str] = Query(None, description="Initial prompt / custom vocabulary"),
     start: Optional[int] = Query(None, description="Start time offset in milliseconds"),
     process_duration: Optional[int] = Query(None, alias="duration", description="Duration to process in milliseconds"),
-    response_format: str = Query("json", description="Output format (json, srt, vtt)"),
+    response_format: str = Query("json", description="Output format (json, srt, vtt, text)"),
+    temperature: Optional[float] = Query(None, ge=0.0, le=1.0, description="Sampling temperature (0.0 to 1.0)"),
+    beam_size: Optional[int] = Query(None, ge=1, le=10, description="Beam size for beam search decoding"),
+    vad: bool = Query(False, description="Enable Voice Activity Detection (Silero VAD)"),
+    vad_threshold: Optional[float] = Query(None, ge=0.0, le=1.0, description="VAD speech probability threshold"),
+    split_on_word: bool = Query(False, description="Split segments on word boundaries rather than tokens"),
+    no_fallback: bool = Query(False, description="Do not use temperature fallback while decoding (-nf)"),
+    suppress_nst: bool = Query(False, description="Suppress non-speech tokens (--suppress-nst)"),
+    no_context: bool = Query(False, description="Do not use past transcription as initial prompt for next window (-nc)"),
+    max_len: Optional[int] = Query(None, ge=0, description="Maximum segment length in characters (-ml)"),
     # Auth
     api_key: str = Depends(extract_api_key),
 ):
@@ -261,12 +272,20 @@ async def listen_pre_recorded(
     Transcribe pre-recorded audio.
 
     **Two input methods:**
-    1. **File upload**: Send audio bytes with `Content-Type: audio/wav` (or other audio type)
+    1. **File upload**: Send audio bytes with `Content-Type: audio/wav` (or other audio/video type)
     2. **URL**: Send JSON body `{"url": "https://..."}` with `Content-Type: application/json`
     """
+    fmt = (response_format or "json").strip().lower()
+    if fmt not in ("json", "srt", "vtt", "text"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported response_format '{response_format}'. Supported: json, srt, vtt, text",
+        )
+
+    canonical_model = resolve_model_name(model)
     # Validate model
-    if model not in model_names:
-        available = ", ".join(model_names.keys())
+    if canonical_model not in model_names:
+        available = ", ".join(list(model_names.keys()) + list(MODEL_ALIASES.keys()))
         raise HTTPException(
             status_code=400,
             detail=f"Unknown model '{model}'. Available: {available}",
@@ -312,8 +331,12 @@ async def listen_pre_recorded(
             audio_path = save_audio_bytes(audio_bytes, ext)
             needs_conversion = ext.lower() not in ("wav",)
 
-        elif content_type in SUPPORTED_AUDIO_CONTENT_TYPES or content_type.startswith("audio/"):
-            # ── Raw audio binary upload ──
+        elif (
+            content_type in SUPPORTED_AUDIO_CONTENT_TYPES
+            or content_type.startswith("audio/")
+            or content_type.startswith("video/")
+        ):
+            # ── Raw audio/video binary upload ──
             audio_bytes = await request.body()
             if not audio_bytes:
                 raise HTTPException(
@@ -333,6 +356,8 @@ async def listen_pre_recorded(
                 "audio/ogg": "ogg", "audio/flac": "flac", "audio/x-flac": "flac",
                 "audio/webm": "webm", "audio/mp4": "mp4",
                 "audio/m4a": "m4a", "audio/x-m4a": "m4a",
+                "video/mp4": "mp4", "video/webm": "webm",
+                "video/quicktime": "mov", "video/x-matroska": "mkv",
             }
             ext = ext_map.get(content_type, "wav")
             audio_path = save_audio_bytes(audio_bytes, ext)
@@ -343,7 +368,7 @@ async def listen_pre_recorded(
                 detail=(
                     f"Unsupported Content-Type: {content_type}. "
                     "Use 'application/json' with {{\"url\": \"...\"}}, "
-                    "'audio/*' with binary body, or 'multipart/form-data' with file upload."
+                    "'audio/*' or 'video/*' with binary body, or 'multipart/form-data' with file upload."
                 ),
             )
 
@@ -360,10 +385,11 @@ async def listen_pre_recorded(
         duration = get_audio_duration(audio_path)
 
         # Run transcription with concurrency control
+        whisper_fmt = fmt if fmt in ("srt", "vtt") else "json"
         async with _transcription_semaphore:
             whisper_output, request_id = await transcribe_audio(
                 audio_path=audio_path,
-                model=model,
+                model=canonical_model,
                 language=language,
                 translate=translate,
                 diarize=diarize,
@@ -371,12 +397,21 @@ async def listen_pre_recorded(
                 prompt=prompt,
                 start_ms=start,
                 duration_ms=process_duration,
-                response_format=response_format,
+                response_format=whisper_fmt,
+                temperature=temperature,
+                beam_size=beam_size,
+                vad=vad,
+                vad_threshold=vad_threshold,
+                split_on_word=split_on_word,
+                no_fallback=no_fallback,
+                suppress_nst=suppress_nst,
+                no_context=no_context,
+                max_len=max_len,
             )
 
         # Handle subtitle exports directly
-        if response_format in ("srt", "vtt"):
-            media_type = "text/vtt" if response_format == "vtt" else "text/plain"
+        if fmt in ("srt", "vtt"):
+            media_type = "text/vtt" if fmt == "vtt" else "text/plain"
             return PlainTextResponse(content=whisper_output, media_type=media_type)
 
         # Transform to Deepgram-style response
@@ -388,6 +423,15 @@ async def listen_pre_recorded(
             include_utterances=utterances,
             sha256=sha256,
         )
+
+        if fmt == "text":
+            transcript_text = (
+                response.get("results", {})
+                .get("channels", [{}])[0]
+                .get("alternatives", [{}])[0]
+                .get("transcript", "")
+            )
+            return PlainTextResponse(content=transcript_text, media_type="text/plain")
 
         return response
 
@@ -466,9 +510,11 @@ async def listen_streaming(
         await websocket.close(code=4001, reason="Invalid or revoked API key")
         return
 
-    if model not in model_names:
+    canonical_model = resolve_model_name(model)
+    if canonical_model not in model_names:
         await websocket.close(code=4002, reason="Unknown model")
         return
+    model = canonical_model
 
     accepted_subprotocol = select_ws_subprotocol(websocket)
     await websocket.accept(subprotocol=accepted_subprotocol)

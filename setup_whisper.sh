@@ -1,6 +1,6 @@
-#!/bin/bash
-set -e  # Exit immediately if a command exits with a non-zero status.
-set -o pipefail # Return value of a pipeline is the status of the last command to exit with a non-zero status
+#!/usr/bin/env bash
+set -e          # Exit immediately if a command exits with a non-zero status.
+set -o pipefail # Return value of a pipeline is the status of the last command to exit with a non-zero status.
 
 # --- Helper Functions ---
 log() {
@@ -18,173 +18,178 @@ error() {
 
 # --- 1. Dependency Checks ---
 log "Checking dependencies..."
-for cmd in git make cmake; do
-    if ! command -v $cmd &> /dev/null; then
-         error "$cmd is not installed. Please install it and try again."
+for cmd in git cmake; do
+    if ! command -v "$cmd" &> /dev/null; then
+        error "$cmd is not installed. Please install it and try again."
     fi
 done
 
 # Check for a C++ compiler
-if ! command -v g++ &> /dev/null && ! command -v clang++ &> /dev/null; then
-    error "No C++ compiler found (g++ or clang++). Please install one."
+if ! command -v g++ &> /dev/null && ! command -v clang++ &> /dev/null && ! command -v c++ &> /dev/null; then
+    error "No C++ compiler found (g++, clang++, or c++). Please install a C++ toolchain."
+fi
+
+if ! command -v ffmpeg &> /dev/null; then
+    warn "ffmpeg is not installed or not in PATH. Audio/video format conversion requires ffmpeg at runtime."
 fi
 
 # --- 2. Clone Repository ---
-REPO_URL="https://github.com/innovatorved/whisper.cpp.git"
+REPO_URL="${WHISPER_REPO_URL:-https://github.com/innovatorved/whisper.cpp.git}"
 DIR_NAME="whisper_temp_build"
-BRANCH="develop" # Use master or main unless a specific branch is required
+BRANCH="${WHISPER_BRANCH:-develop}"
 
 if [ -d "$DIR_NAME" ]; then
     warn "Directory '$DIR_NAME' already exists. Removing it to ensure a clean build..."
     rm -rf "$DIR_NAME"
 fi
 
-log "Cloning repository from $REPO_URL..."
-git clone "$REPO_URL" "$DIR_NAME"
+log "Cloning repository from $REPO_URL (branch: $BRANCH)..."
+if ! git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$DIR_NAME" 2>/dev/null; then
+    warn "Branch '$BRANCH' not found or shallow clone failed; cloning default branch..."
+    git clone --depth 1 "$REPO_URL" "$DIR_NAME"
+fi
 cd "$DIR_NAME"
 
-# --- 3. Build ---
+# --- 3. Platform & Architecture Detection ---
 OS=$(uname -s)
-MAKE_ARGS=""
-
-log "Detected Platform: $OS"
-
-# Detect CPU architecture
 ARCH=$(uname -m)
-log "Detected Architecture: $ARCH"
+
+log "Detected Platform: $OS ($ARCH)"
 
 CMAKE_FLAGS="-DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON"
 
-if [ "$OS" = "Darwin" ]; then
-    log "macOS detected. Using default build."
-elif [ "$OS" = "Linux" ]; then
-    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-        log "ARM64 architecture detected. Using conservative ARM flags..."
-        # Avoid passing CFLAGS which confuses CMake feature detection. Explicitly disable native optimizations 
-        # and specify the base target arch if needed, or rely on cmake defaults.
-        export CFLAGS="-fPIC"
-        export CXXFLAGS="-fPIC"
+case "$OS" in
+    Darwin*)
+        log "macOS detected. Enabling Apple Accelerate and Metal support."
+        CMAKE_FLAGS="$CMAKE_FLAGS -DGGML_METAL=ON -DGGML_ACCELERATE=ON"
+        if [ "${WHISPER_COREML:-0}" = "1" ]; then
+            log "Enabling CoreML support (WHISPER_COREML=1)."
+            CMAKE_FLAGS="$CMAKE_FLAGS -DWHISPER_COREML=ON"
+        fi
+        ;;
+    Linux*)
+        if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            log "Linux ARM64 architecture detected. Using portable ARM flags..."
+            export CFLAGS="${CFLAGS:-} -fPIC"
+            export CXXFLAGS="${CXXFLAGS:-} -fPIC"
+            CMAKE_FLAGS="$CMAKE_FLAGS -DGGML_NATIVE=OFF"
+        fi
+
+        if command -v nvcc &> /dev/null && command -v nvidia-smi &> /dev/null; then
+            log "NVIDIA CUDA toolkit and GPU detected. Enabling CUDA support."
+            CMAKE_FLAGS="$CMAKE_FLAGS -DGGML_CUDA=ON"
+        elif command -v nvidia-smi &> /dev/null; then
+            warn "NVIDIA GPU detected via nvidia-smi, but 'nvcc' compiler was not found. Building with CPU backend."
+        fi
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        log "Windows (MSYS2/MinGW/Git Bash) detected."
         CMAKE_FLAGS="$CMAKE_FLAGS -DGGML_NATIVE=OFF"
-    fi
-    
-    if command -v nvidia-smi &> /dev/null; then
-        log "NVIDIA GPU detected. Enabling CUDA support."
-        CMAKE_FLAGS="$CMAKE_FLAGS -DGGML_CUDA=1"
-    fi
-fi
+        ;;
+    *)
+        warn "Unrecognized OS '$OS'. Proceeding with generic CMake flags."
+        ;;
+esac
 
-log "Building project..."
-
-# Checkout a known stable version before building to avoid recent breaking changes
-# We are currently inside $DIR_NAME
-git fetch --tags
-git checkout v1.7.0 || true
-
-# Patch the ggml-cpu specifically for fp16 neon errors if the path exists
-sed -i 's/#if defined(__ARM_NEON)/#if 0 \/\/ defined(__ARM_NEON)/g' "ggml/src/ggml-cpu/vec.cpp" 2>/dev/null || true
-sed -i 's/#if defined(__ARM_NEON)/#if 0 \/\/ defined(__ARM_NEON)/g' "ggml/src/ggml-cpu/ops.cpp" 2>/dev/null || true
-sed -i 's/#if defined(__ARM_NEON)/#if 0 \/\/ defined(__ARM_NEON)/g' "ggml/src/ggml-cpu/repack.cpp" 2>/dev/null || true
-sed -i 's/#if defined(__ARM_NEON)/#if 0 \/\/ defined(__ARM_NEON)/g' "ggml/src/ggml-cpu/simd-mappings.h" 2>/dev/null || true
-
+# --- 4. Build ---
+log "Configuring CMake with flags: $CMAKE_FLAGS"
 if ! cmake -S . -B build $CMAKE_FLAGS; then
     error "CMake configuration failed."
 fi
 
-if ! cmake --build build --config Release -j; then
-    error "Build failed."
-fi
-
-# Locate Binary
-BINARY_SOURCE=""
-if [ -f "main" ]; then
-    BINARY_SOURCE="main"
-elif [ -f "whisper-cli" ]; then
-    BINARY_SOURCE="whisper-cli"
-elif [ -f "bin/whisper-cli" ]; then
-    BINARY_SOURCE="bin/whisper-cli"
-elif [ -f "build/bin/whisper-cli" ]; then
-    BINARY_SOURCE="build/bin/whisper-cli"
-else
-    # Try using find to locate it
-    BINARY_SOURCE=$(find . -name "whisper-cli" -type f | head -n 1)
-    if [ -z "$BINARY_SOURCE" ]; then
-         BINARY_SOURCE=$(find . -name "main" -type f | head -n 1)
+log "Compiling whisper-cli..."
+if ! cmake --build build --config Release --target whisper-cli -j; then
+    warn "Target 'whisper-cli' build returned non-zero; attempting full Release build..."
+    if ! cmake --build build --config Release -j; then
+        error "Build failed."
     fi
 fi
 
+# Locate Binary (Unix and Windows paths)
+BINARY_SOURCE=""
+for candidate in \
+    "build/bin/whisper-cli" \
+    "build/bin/Release/whisper-cli.exe" \
+    "build/bin/whisper-cli.exe" \
+    "bin/whisper-cli" \
+    "whisper-cli" \
+    "main"; do
+    if [ -f "$candidate" ]; then
+        BINARY_SOURCE="$candidate"
+        break
+    fi
+done
+
 if [ -z "$BINARY_SOURCE" ]; then
-    error "Could not locate compiled binary (main or whisper-cli)."
+    BINARY_SOURCE=$(find build -name "whisper-cli*" -type f 2>/dev/null | head -n 1 || true)
 fi
 
-log "Found binary: $BINARY_SOURCE"
+if [ -z "$BINARY_SOURCE" ]; then
+    error "Could not locate compiled whisper-cli binary."
+fi
 
-# --- 4. Install Binary ---
-cd .. # Go back to project root
+log "Found compiled binary: $BINARY_SOURCE"
+
+# --- 5. Install Binary ---
+cd .. # Return to project root
 
 DEST_DIR="binary"
-DEST_BINARY="$DEST_DIR/whisper-cli"
+mkdir -p "$DEST_DIR"
+
+if [[ "$BINARY_SOURCE" == *.exe ]]; then
+    DEST_BINARY="$DEST_DIR/whisper-cli.exe"
+else
+    DEST_BINARY="$DEST_DIR/whisper-cli"
+fi
 
 log "Installing binary to $DEST_BINARY..."
-mkdir -p "$DEST_DIR"
 cp "$DIR_NAME/$BINARY_SOURCE" "$DEST_BINARY"
+chmod +x "$DEST_BINARY" 2>/dev/null || true
 
-# --- 5. Clean Up ---
-log "Cleaning up build directory..."
-# Remove the build directory
+# Also create a extensionless copy on Windows Git Bash if needed
+if [[ "$DEST_BINARY" == *.exe ]] && [ ! -f "$DEST_DIR/whisper-cli" ]; then
+    cp "$DEST_BINARY" "$DEST_DIR/whisper-cli" || true
+fi
+
+# --- 6. Clean Up ---
+log "Cleaning up temporary build directory..."
 rm -rf "$DIR_NAME"
 
-# --- 6. Update .gitignore ---
+# --- 7. Update .gitignore ---
 GITIGNORE=".gitignore"
-log "Updating $GITIGNORE..."
 touch "$GITIGNORE"
 
-# Add binary directory and models to .gitignore if not present
-if ! grep -q "^binary/" "$GITIGNORE"; then
-    echo "binary/" >> "$GITIGNORE"
-    log "Added 'binary/' to $GITIGNORE"
-fi
+for entry in "binary/" "models/" "whisper_temp_build/"; do
+    if ! grep -q "^${entry}" "$GITIGNORE"; then
+        echo "$entry" >> "$GITIGNORE"
+        log "Added '$entry' to $GITIGNORE"
+    fi
+done
 
-if ! grep -q "^models/" "$GITIGNORE"; then
-    echo "models/" >> "$GITIGNORE"
-    log "Added 'models/' to $GITIGNORE"
-fi
-
-if ! grep -q "^whisper_temp_build/" "$GITIGNORE"; then
-    echo "whisper_temp_build/" >> "$GITIGNORE"
-    log "Added 'whisper_temp_build/' to $GITIGNORE"
-fi
-
-# --- 7. Download Model (Optional/Verify) ---
-# Check if a model exists, if not download a small one for verification
-MODEL="tiny.en"
+# --- 8. Download Default Model (If Needed) ---
+MODEL="${DEFAULT_MODEL:-tiny.en}"
 MODEL_PATH="models/ggml-$MODEL.bin"
+MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-$MODEL.bin"
 
+mkdir -p models
 if [ ! -f "$MODEL_PATH" ]; then
-    log "Model $MODEL not found at $MODEL_PATH. Downloading..."
-    mkdir -p models
-    # leveraging the download script from the (now deleted) repo is tricky if we deleted it.
-    # We should have used the script inside the repo before deleting, or use the one we have locally if any.
-    # Since we deleted the repo, let's use a direct download or skip.
-    # However, to be robust, let's clone deeply or keep the script.
-    
-    # Alternative: Download directly using curl/wget if we know the URL structure, 
-    # OR (Better for this specific task) just warn the user or assume they handle models via the app.
-    # But the user asked to "Add any generated binaries ... to .gitignore", and "Use the following setup script as a reference".
-    # The reference script downloads the model. 
-    # Let's try to download the model MANUALLY using the standard huggingface/ggml url to be safe,
-    # OR temporarily keep the repo to use its script.
-    
-    # Let's simply warn for now as the app seems to manage models or expects them.
-    log "Note: No model found at $MODEL_PATH. The application may try to download one or fail if not present."
-    log "You can download models manually or let the app handle it."
+    if command -v curl &> /dev/null; then
+        log "Downloading default model ($MODEL) to $MODEL_PATH..."
+        curl -L --fail --progress-bar "$MODEL_URL" -o "$MODEL_PATH" || warn "Could not download $MODEL_PATH now; the app will download models on startup."
+    elif command -v wget &> /dev/null; then
+        log "Downloading default model ($MODEL) to $MODEL_PATH..."
+        wget -q --show-progress "$MODEL_URL" -O "$MODEL_PATH" || warn "Could not download $MODEL_PATH now; the app will download models on startup."
+    else
+        warn "Neither curl nor wget found. Models will be downloaded automatically by Python on startup."
+    fi
 else
-    log "Model $MODEL found."
+    log "Default model found at $MODEL_PATH."
 fi
 
-# --- 8. Verification ---
-if [ -x "$DEST_BINARY" ]; then
-    log "Verification: Binary exists and is executable."
-    "$DEST_BINARY" --help | head -n 5
+# --- 9. Verification ---
+if [ -x "$DEST_BINARY" ] || [ -f "$DEST_BINARY" ]; then
+    log "Verification: Binary exists at $DEST_BINARY."
+    "$DEST_BINARY" --help 2>&1 | head -n 5 || true
 else
     error "Binary not found or not executable at $DEST_BINARY"
 fi

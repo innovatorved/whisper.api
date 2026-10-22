@@ -21,10 +21,14 @@ The Whisper API uses **GGML-format** model files (`.bin`) compatible with [whisp
 | `medium` | 769M | ~1.5 GB | Slow | High accuracy, multi-language |
 | `medium.en` | 769M | ~1.5 GB | Slow | English-only, near-best accuracy |
 | `large-v2` | 1550M | ~3.1 GB | Slowest | Maximum accuracy, all languages |
-| `large-v3` | 1550M | ~3.1 GB | Slowest | Latest, best multilingual |
+| `large-v3` | 1550M | ~3.1 GB | Slowest | Latest full multilingual model |
+| `large-v3-turbo` | 809M | ~1.6 GB | Fast | Pruned decoder (`large-v3` quality at ~4× speed) |
+| `large-v3-turbo.q5` | 809M | ~574 MB | Very Fast | **Recommended** multilingual model (`q5_0`) |
+| `large-v3-turbo.q8` | 809M | ~874 MB | Fast | High-precision quantized `large-v3-turbo` (`q8_0`) |
+| `silero-v6.2.0` | VAD | ~885 KB | Instant | Silero Voice Activity Detection (`vad=true`) |
 
 <Aside type="tip">
-  For most CPU-based production workloads, **`small.en`** with **`q5_1` quantization** offers the best balance of speed and accuracy.
+  For most production workloads, **`large-v3-turbo.q5`** (multilingual) or **`small.en.q5`** (English-only) offers the best balance of speed, memory footprint, and transcription accuracy. You can also pass `model=whisper-1` for OpenAI SDK compatibility.
 </Aside>
 
 ---
@@ -46,6 +50,19 @@ GGML models support multiple quantization levels to trade accuracy for speed and
 ---
 
 ## Downloading Models
+
+### Using the Built-in CLI (`app.cli`)
+
+You can list all registered models and download any model directly via the CLI without manual `curl` commands:
+
+```bash
+# List all registered models, aliases, and installation status
+python -m app.cli models
+
+# Download large-v3-turbo (q5_0) or Silero VAD
+python -m app.cli download large-v3-turbo.q5
+python -m app.cli download silero-v6.2.0
+```
 
 ### From Hugging Face
 

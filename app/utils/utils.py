@@ -1,8 +1,9 @@
 """
 Core transcription and audio utility functions for the Whisper Speech-to-Text API.
 
-Uses whisper-cli with JSON output (-oj) to produce word-level timestamps,
-then transforms the output into Deepgram-compatible response structures.
+Uses whisper-cli with full JSON output (-ojf) to produce word-level timestamps and
+token probabilities, transforming the output into Deepgram-compatible and
+OpenAI-compatible response structures.
 """
 
 import asyncio
@@ -12,13 +13,15 @@ import json
 import logging
 import os
 import re
+import shlex
+import shutil
 import socket
 import subprocess
+import sys
 import urllib
-import shlex
 import uuid
 import wave
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from urllib.parse import urlparse
 
@@ -30,6 +33,7 @@ from tqdm import tqdm
 from app.core.config import settings
 
 from .constant import (
+    MODEL_ALIASES,
     STREAM_CHANNELS,
     STREAM_SAMPLE_RATE,
     STREAM_SAMPLE_WIDTH,
@@ -50,6 +54,78 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(TRANSCRIBE_DIR, exist_ok=True)
 
 _METADATA_IP = ipaddress.ip_address("169.254.169.254")
+
+
+def resolve_whisper_binary(configured_path: Optional[str] = None) -> str:
+    """
+    Resolve the whisper-cli binary path across platforms (macOS, Linux, Windows).
+
+    Automatically handles `.exe` extension differences on Windows vs Unix-like OSes
+    and falls back to PATH lookup if the configured relative path is not present.
+    """
+    raw_path = (configured_path or settings.WHISPER_BINARY_PATH or "./binary/whisper-cli").strip()
+    norm_path = os.path.normpath(raw_path)
+    is_windows = os.name == "nt" or sys.platform == "win32"
+
+    candidates: List[str] = []
+    if is_windows:
+        if not norm_path.lower().endswith(".exe"):
+            candidates.append(f"{norm_path}.exe")
+        candidates.append(norm_path)
+    else:
+        if norm_path.lower().endswith(".exe"):
+            candidates.append(norm_path[:-4])
+        candidates.append(norm_path)
+
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+
+    # Fallback: check system PATH for whisper-cli / whisper-cli.exe
+    which_cmd = "whisper-cli.exe" if is_windows else "whisper-cli"
+    found_in_path = shutil.which(which_cmd) or shutil.which("whisper-cli")
+    if found_in_path:
+        return found_in_path
+
+    # Return primary platform-appropriate candidate even if not yet built
+    return candidates[0]
+
+
+def resolve_model_name(model: str) -> str:
+    """
+    Resolve a user-supplied model name or alias (e.g. 'whisper-1') to a canonical
+    key in `model_names`.
+    """
+    cleaned = (model or "tiny.en").strip()
+    if cleaned in model_names:
+        return cleaned
+    if cleaned in MODEL_ALIASES:
+        target = MODEL_ALIASES[cleaned]
+        # For whisper-1 alias, prefer tiny.en if present, otherwise first available startup model
+        if cleaned == "whisper-1":
+            for candidate in ("tiny.en", "base.en.q5", "tiny.en.q5"):
+                candidate_file = model_names.get(candidate)
+                if candidate_file and os.path.exists(
+                    os.path.join(settings.MODELS_DIR, candidate_file)
+                ):
+                    return candidate
+        return target
+    return cleaned
+
+
+def _is_special_whisper_token(token_text: str) -> bool:
+    """
+    Return True if a whisper-cli token string is an internal special token
+    such as `[_BEG_]`, `[_TT_398]`, `[_EOT_]`, `[_SOT_]`, etc.
+    """
+    stripped = token_text.strip()
+    if not stripped:
+        return True
+    if stripped.startswith("[_") and stripped.endswith("]"):
+        return True
+    if stripped.startswith("<|") and stripped.endswith("|>"):
+        return True
+    return False
 
 
 def _ip_is_public_facing(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
@@ -152,14 +228,25 @@ async def transcribe_audio(
     prompt: Optional[str] = None,
     start_ms: Optional[int] = None,
     duration_ms: Optional[int] = None,
-    response_format: str = "json"
+    response_format: str = "json",
+    temperature: Optional[float] = None,
+    beam_size: Optional[int] = None,
+    vad: bool = False,
+    vad_threshold: Optional[float] = None,
+    split_on_word: bool = False,
+    no_fallback: bool = False,
+    suppress_nst: bool = False,
+    no_context: bool = False,
+    max_len: Optional[int] = None,
+    video_input: bool = False,
 ) -> Tuple[Union[Dict[str, Any], str], str]:
     """
-    Transcribe an audio file using whisper-cli.
+    Transcribe an audio (or video) file using whisper-cli.
 
     Returns the parsed JSON dictionary OR raw subtitle text (SRT/VTT).
     """
-    model_file = get_model_filename(model)
+    canonical_model = resolve_model_name(model)
+    model_file = get_model_filename(canonical_model)
     model_path = os.path.join(settings.MODELS_DIR, model_file)
 
     if not os.path.exists(model_path):
@@ -171,13 +258,16 @@ async def transcribe_audio(
     # Generate unique output base path
     request_id = str(uuid.uuid4())
     output_base = os.path.join(TRANSCRIBE_DIR, request_id)
+    binary_path = resolve_whisper_binary(settings.WHISPER_BINARY_PATH)
+
+    input_flag = "-vi" if video_input else "-f"
 
     # Build whisper-cli argv (no shell — avoids injection via paths or prompt)
     cmd_parts: List[str] = [
-        settings.WHISPER_BINARY_PATH,
+        binary_path,
         "-m",
         model_path,
-        "-f",
+        input_flag,
         audio_path,
         "-t",
         str(threads),
@@ -185,7 +275,8 @@ async def transcribe_audio(
         output_base,
     ]
 
-    # Output format
+    # Output format — use -ojf (--output-json-full) so token-level timestamps
+    # and confidence scores are populated in the JSON output!
     if response_format == "srt":
         cmd_parts.append("-osrt")
         output_ext = ".srt"
@@ -193,12 +284,12 @@ async def transcribe_audio(
         cmd_parts.append("-ovtt")
         output_ext = ".vtt"
     else:
-        cmd_parts.append("-oj")
+        cmd_parts.append("-ojf")
         output_ext = ".json"
 
     # Language
-    if detect_language:
-        cmd_parts.append("-dl")
+    if detect_language or language == "auto":
+        cmd_parts.extend(["-l", "auto"])
     else:
         whisper_lang = supported_languages.get(language, "en")
         cmd_parts.extend(["-l", whisper_lang])
@@ -211,17 +302,44 @@ async def transcribe_audio(
     if diarize:
         cmd_parts.append("-di")
 
-    # Advanced features
+    # Advanced features & decoding controls
     if prompt is not None and prompt != "":
         cmd_parts.extend(["--prompt", prompt])
     if start_ms is not None:
         cmd_parts.extend(["-ot", str(start_ms)])
     if duration_ms is not None:
         cmd_parts.extend(["-d", str(duration_ms)])
+    if temperature is not None:
+        cmd_parts.extend(["-tp", str(temperature)])
+    if beam_size is not None:
+        cmd_parts.extend(["-bs", str(beam_size)])
+    if split_on_word:
+        cmd_parts.append("-sow")
+    if no_fallback:
+        cmd_parts.append("-nf")
+    if suppress_nst:
+        cmd_parts.append("--suppress-nst")
+    if no_context:
+        cmd_parts.append("-nc")
+    if max_len is not None and max_len > 0:
+        cmd_parts.extend(["-ml", str(max_len)])
+    if vad:
+        vad_model_path = settings.VAD_MODEL_PATH
+        if not vad_model_path or not os.path.exists(vad_model_path):
+            try:
+                from app.utils.checks import ensure_model_available
+                vad_model_path = ensure_model_available("silero-v6.2.0")
+            except Exception as e:
+                logger.warning("Could not auto-download Silero VAD model: %s", e)
+        cmd_parts.append("--vad")
+        if vad_model_path and os.path.exists(vad_model_path):
+            cmd_parts.extend(["-vm", vad_model_path])
+        if vad_threshold is not None:
+            cmd_parts.extend(["-vt", str(vad_threshold)])
 
     logger.info(
         f"[{request_id}] Starting transcription "
-        f"(model={model}, format={response_format}, translate={translate}, detect_language={detect_language})"
+        f"(model={canonical_model}, format={response_format}, translate={translate}, detect_language={detect_language})"
     )
     logger.debug(f"[{request_id}] whisper-cli argv: {shlex.join(cmd_parts)}")
 
@@ -280,28 +398,9 @@ def parse_whisper_json_to_deepgram(
     sha256: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Transform whisper-cli JSON output into Deepgram-compatible response format.
-
-    Whisper JSON structure:
-    {
-      "systeminfo": "...",
-      "model": { "type": "...", "multilingual": false, ... },
-      "params": { ... },
-      "result": { "language": "en" },
-      "transcription": [
-        {
-          "timestamps": { "from": "00:00:00,000", "to": "00:00:05,000" },
-          "offsets": { "from": 0, "to": 5000 },
-          "text": " Hello world",
-          "tokens": [
-            { "text": " Hello", "timestamps": {"from": "...", "to": "..."}, "offsets": {...}, "id": 15947, "p": 0.95 },
-            ...
-          ]
-        },
-        ...
-      ]
-    }
+    Transform whisper-cli JSON output (-ojf) into Deepgram-compatible response format.
     """
+    canonical_model = resolve_model_name(model)
     transcription_segments = whisper_json.get("transcription", [])
     detected_lang = whisper_json.get("result", {}).get("language", "en")
 
@@ -310,9 +409,10 @@ def parse_whisper_json_to_deepgram(
     full_transcript_parts = []
     utterances = []
 
-    for seg_idx, segment in enumerate(transcription_segments):
+    for segment in transcription_segments:
         seg_text = segment.get("text", "").strip()
-        full_transcript_parts.append(seg_text)
+        if seg_text:
+            full_transcript_parts.append(seg_text)
 
         # Segment-level timing
         seg_offsets = segment.get("offsets", {})
@@ -327,17 +427,21 @@ def parse_whisper_json_to_deepgram(
 
         for token in tokens:
             token_text = token.get("text", "").strip()
-            if not token_text:
+            if _is_special_whisper_token(token_text):
+                continue
+
+            cleaned_word = token_text.lower().strip(" .,!?;:\"'()-[]")
+            if not cleaned_word:
                 continue
 
             # Token timing
             t_offsets = token.get("offsets", {})
             t_start = t_offsets.get("from", seg_start_ms) / 1000.0
             t_end = t_offsets.get("to", seg_end_ms) / 1000.0
-            t_confidence = token.get("p", 0.0)
+            t_confidence = float(token.get("p", 0.0))
 
             word_info = {
-                "word": token_text.lower().strip(" .,!?;:"),
+                "word": cleaned_word,
                 "start": round(t_start, 2),
                 "end": round(t_end, 2),
                 "confidence": round(t_confidence, 6),
@@ -364,23 +468,26 @@ def parse_whisper_json_to_deepgram(
     overall_confidence = _avg_confidence(words) if words else 0.0
 
     # Build model info
-    m_info = model_info.get(model, {
-        "name": f"whisper-{model}",
-        "version": "ggml-v1",
-        "arch": "whisper",
-    })
+    m_info = model_info.get(
+        canonical_model,
+        {
+            "name": f"whisper-{canonical_model}",
+            "version": "ggml-v1",
+            "arch": "whisper",
+        },
+    )
 
     # Construct Deepgram-style response
     response = {
         "metadata": {
             "request_id": request_id,
-            "created": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "duration": round(audio_duration, 6),
             "channels": 1,
             "models": [model],
             "model_info": {
                 model: {
-                    "name": m_info.get("name", f"whisper-{model}"),
+                    "name": m_info.get("name", f"whisper-{canonical_model}"),
                     "version": m_info.get("version", "unknown"),
                     "arch": m_info.get("arch", "whisper"),
                 }
@@ -411,6 +518,100 @@ def parse_whisper_json_to_deepgram(
     return response
 
 
+def parse_whisper_json_to_openai(
+    whisper_json: Dict[str, Any],
+    response_format: str = "json",
+    audio_duration: float = 0.0,
+    translate: bool = False,
+    timestamp_granularities: Optional[Sequence[str]] = None,
+) -> Union[Dict[str, Any], str]:
+    """
+    Transform whisper-cli JSON output (-ojf) into OpenAI Audio API format
+    (`json`, `text`, or `verbose_json`).
+    """
+    transcription_segments = whisper_json.get("transcription", [])
+    detected_lang = whisper_json.get("result", {}).get("language", "en")
+
+    full_transcript_parts: List[str] = []
+    openai_segments: List[Dict[str, Any]] = []
+    openai_words: List[Dict[str, Any]] = []
+
+    for seg_idx, segment in enumerate(transcription_segments):
+        seg_text = segment.get("text", "").strip()
+        if seg_text:
+            full_transcript_parts.append(seg_text)
+
+        seg_offsets = segment.get("offsets", {})
+        seg_start_ms = seg_offsets.get("from", 0)
+        seg_end_ms = seg_offsets.get("to", 0)
+        seg_start = round(seg_start_ms / 1000.0, 2)
+        seg_end = round(seg_end_ms / 1000.0, 2)
+
+        tokens = segment.get("tokens", [])
+        token_ids: List[int] = []
+        token_probs: List[float] = []
+
+        for token in tokens:
+            token_text = token.get("text", "").strip()
+            if _is_special_whisper_token(token_text):
+                continue
+
+            if "id" in token:
+                token_ids.append(int(token["id"]))
+            prob = float(token.get("p", 0.0))
+            token_probs.append(prob)
+
+            cleaned_word = token_text.strip(" .,!?;:\"'()-[]")
+            if cleaned_word:
+                t_offsets = token.get("offsets", {})
+                w_start = round(t_offsets.get("from", seg_start_ms) / 1000.0, 2)
+                w_end = round(t_offsets.get("to", seg_end_ms) / 1000.0, 2)
+                openai_words.append(
+                    {
+                        "word": cleaned_word,
+                        "start": w_start,
+                        "end": w_end,
+                    }
+                )
+
+        avg_prob = sum(token_probs) / len(token_probs) if token_probs else 0.0
+        openai_segments.append(
+            {
+                "id": seg_idx,
+                "seek": 0,
+                "start": seg_start,
+                "end": seg_end,
+                "text": segment.get("text", ""),
+                "tokens": token_ids,
+                "temperature": 0.0,
+                "avg_logprob": round(avg_prob - 1.0, 4) if avg_prob > 0 else -0.5,
+                "compression_ratio": 1.0,
+                "no_speech_prob": round(max(0.0, 1.0 - avg_prob), 4) if avg_prob > 0 else 0.0,
+            }
+        )
+
+    full_transcript = " ".join(full_transcript_parts).strip()
+
+    if response_format == "text":
+        return full_transcript
+
+    if response_format == "verbose_json":
+        granularities = set(timestamp_granularities or ["segment"])
+        result: Dict[str, Any] = {
+            "task": "translate" if translate else "transcribe",
+            "language": detected_lang,
+            "duration": round(audio_duration, 2),
+            "text": full_transcript,
+        }
+        if "word" in granularities:
+            result["words"] = openai_words
+        if "segment" in granularities or not granularities:
+            result["segments"] = openai_segments
+        return result
+
+    return {"text": full_transcript}
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # AUDIO UTILITIES
 # ═══════════════════════════════════════════════════════════════════════
@@ -428,7 +629,8 @@ def save_audio_file(file=None) -> str:
 
 def save_audio_bytes(audio_bytes: bytes, extension: str = "wav") -> str:
     """Save raw audio bytes to disk. Returns the file path."""
-    path = os.path.join(AUDIO_DIR, f"{uuid.uuid4()}.{extension}")
+    clean_ext = (extension or "wav").lstrip(".").lower()
+    path = os.path.join(AUDIO_DIR, f"{uuid.uuid4()}.{clean_ext}")
     with open(path, "wb") as f:
         f.write(audio_bytes)
     return path
@@ -487,7 +689,7 @@ async def download_audio_from_url(url: str) -> str:
 
 async def convert_audio_to_wav(input_path: str) -> str:
     """
-    Convert any audio file to 16kHz mono WAV using ffmpeg.
+    Convert any audio or video file to 16kHz mono WAV using ffmpeg.
     Returns the path to the converted WAV file.
     """
     output_path = os.path.join(AUDIO_DIR, f"{uuid.uuid4()}.wav")
@@ -496,6 +698,7 @@ async def convert_audio_to_wav(input_path: str) -> str:
         "-y",
         "-i",
         input_path,
+        "-vn",
         "-ar",
         "16000",
         "-ac",
@@ -517,7 +720,6 @@ async def convert_audio_to_wav(input_path: str) -> str:
             )
         return output_path
     except Exception as e:
-        # Don't fall back to original file because whisper-cli (this build) requires WAV
         if isinstance(e, HTTPException):
             raise
         logger.error("Error during audio conversion: %s", e)
@@ -528,7 +730,7 @@ async def convert_audio_to_wav(input_path: str) -> str:
 
 
 def get_audio_duration(audio_file: str) -> float:
-    """Gets the duration of the audio file in seconds using ffprobe."""
+    """Gets the duration of the audio file in seconds using ffprobe (with wave module fallback)."""
     try:
         result = subprocess.run(
             [
@@ -546,14 +748,23 @@ def get_audio_duration(audio_file: str) -> float:
             check=False,
             timeout=60,
         )
-        if result.returncode != 0:
-            logger.error("ffprobe failed: %s", result.stderr.strip()[:500])
-            return 0.0
-        duration = result.stdout.strip()
-        return float(duration)
+        if result.returncode == 0 and result.stdout.strip():
+            return float(result.stdout.strip())
+        logger.debug("ffprobe non-zero or empty output: %s", result.stderr.strip()[:500])
     except (ValueError, subprocess.TimeoutExpired, OSError) as e:
-        logger.error("Error getting duration: %s", e)
-        return 0.0
+        logger.debug("ffprobe unavailable or failed (%s); trying wave fallback", e)
+
+    # Fallback for WAV files if ffprobe is not installed
+    try:
+        if audio_file.lower().endswith(".wav") and os.path.exists(audio_file):
+            with wave.open(audio_file, "rb") as wf:
+                frames = wf.getnframes()
+                rate = wf.getframerate()
+                if rate > 0:
+                    return float(frames) / float(rate)
+    except Exception:
+        pass
+    return 0.0
 
 
 def compute_sha256(file_path: str) -> str:
@@ -585,9 +796,10 @@ def create_wav_from_pcm(pcm_data: bytes, sample_rate: int = STREAM_SAMPLE_RATE) 
 
 
 def get_model_filename(model: str) -> str:
-    """Get the model binary filename from user-friendly model name."""
-    if model in model_names:
-        return model_names[model]
+    """Get the model binary filename from user-friendly model name or alias."""
+    canonical = resolve_model_name(model)
+    if canonical in model_names:
+        return model_names[canonical]
     raise HTTPException(
         status_code=400,
         detail=f"Unknown model '{model}'",
@@ -599,22 +811,28 @@ def get_model_name(model: str = None) -> str:
     return get_model_filename(model or "tiny.en.q5")
 
 
-def list_available_models() -> list:
-    """List all available models with metadata."""
+def list_available_models(include_uninstalled: bool = False) -> list:
+    """List available models with metadata."""
     available = []
     for key, filename in model_names.items():
+        if key == "silero-v6.2.0" and not include_uninstalled:
+            continue
         model_path = os.path.join(settings.MODELS_DIR, filename)
-        if os.path.exists(model_path):
+        exists = os.path.exists(model_path)
+        if exists or include_uninstalled:
             info = model_info.get(key, {})
-            available.append({
-                "name": info.get("name", key),
-                "model_id": key,
-                "description": info.get("description", ""),
-                "language": info.get("language", "en"),
-                "version": info.get("version", "unknown"),
-                "file": filename,
-                "size_bytes": os.path.getsize(model_path),
-            })
+            available.append(
+                {
+                    "name": info.get("name", key),
+                    "model_id": key,
+                    "description": info.get("description", ""),
+                    "language": info.get("language", "en"),
+                    "version": info.get("version", "unknown"),
+                    "file": filename,
+                    "installed": exists,
+                    "size_bytes": os.path.getsize(model_path) if exists else 0,
+                }
+            )
     return available
 
 
@@ -707,15 +925,24 @@ def download_file(url, filepath):
 
 def get_all_routes(app):
     routes = []
-    for route in app.routes:
-        methods = getattr(route, "methods", set())
-        routes.append(
-            {
-                "path": route.path,
-                "name": route.name,
-                "methods": list(methods) if methods else [],
-            }
-        )
+
+    def _collect(route_list, prefix=""):
+        for route in route_list:
+            if hasattr(route, "path"):
+                methods = getattr(route, "methods", set())
+                full_path = f"{prefix}{route.path}" if prefix else route.path
+                routes.append(
+                    {
+                        "path": full_path,
+                        "name": getattr(route, "name", "") or "",
+                        "methods": list(methods) if methods else [],
+                    }
+                )
+            elif hasattr(route, "routes"):
+                sub_prefix = f"{prefix}{getattr(route, 'prefix', '')}"
+                _collect(route.routes, sub_prefix)
+
+    _collect(getattr(app, "routes", []))
     return routes
 
 
@@ -787,8 +1014,12 @@ def _content_type_to_ext(content_type: str, url: str = "") -> str:
         "audio/webm": "webm",
         "audio/mp4": "mp4",
         "audio/m4a": "m4a",
+        "video/mp4": "mp4",
+        "video/webm": "webm",
+        "video/quicktime": "mov",
+        "video/x-matroska": "mkv",
     }
-    ext = ct_map.get(content_type.split(";")[0].strip(), "")
+    ext = ct_map.get(content_type.split(";")[0].strip().lower(), "")
     if not ext and url:
         # Try to extract from URL
         path = url.split("?")[0]

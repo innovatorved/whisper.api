@@ -30,9 +30,10 @@ app = FastAPI(
     title="Whisper Speech-to-Text API",
     description=(
         "A self-hosted speech-to-text API powered by whisper.cpp. "
-        "Supports pre-recorded audio transcription and live streaming via WebSocket."
+        "Supports Deepgram-compatible (/v1/listen) and OpenAI-compatible (/v1/audio/*) "
+        "pre-recorded transcription, translation, and live streaming via WebSocket."
     ),
-    version="2.0.0",
+    version=settings.PROJECT_VERSION,
     openapi_url="/v1/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",

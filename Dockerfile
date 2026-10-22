@@ -1,4 +1,4 @@
-FROM python:3.10-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --chown=user:user requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
-# Add test token endpoint flag explicitly, Disable this flag for production environments!
+# Enable test token endpoint flag for local/demo container (disable in production)
 ENV ENABLE_TEST_TOKEN_ENDPOINT=true
 
 # Switch to non-root user
@@ -35,8 +35,7 @@ WORKDIR $HOME/app
 # Copy application code
 COPY --chown=user:user . $HOME/app
 
-# Build whisper binary from source
-# Run setup_whisper_new.sh with cache-busting comment
+# Build whisper-cli binary from source
 RUN chmod +x ./setup_whisper.sh && ./setup_whisper.sh
 
 # Expose the API port (standard for HF Spaces)
