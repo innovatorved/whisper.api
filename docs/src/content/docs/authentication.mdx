@@ -47,7 +47,7 @@ API Key Created Successfully!
 Name:  AdminToken
 Token: 90e4b3189f324cc881e708c27d81d1d0...
 ----------------------------------------
-Keep this token safe! Pass it in the Authorization header as: Token <token>
+Keep this token safe! Pass it in the Authorization header as: Token <token> or Bearer <token>
 ```
 
 <Aside type="caution">
@@ -86,21 +86,34 @@ Successfully revoked key 'AdminToken' starting with 90e4b318
   If multiple keys match the prefix, the CLI will ask you to be more specific. Use a longer prefix to uniquely identify the key.
 </Aside>
 
+<Aside type="tip">
+  The same CLI also manages GGML models via `python -m app.cli models` and `python -m app.cli download <model>`. See the [Models guide](/docs/models) for details.
+</Aside>
+
 ---
 
 ## Using API Keys
 
 ### REST API
 
-Pass the token in the `Authorization` header with the `Token` prefix:
+- **Deepgram-compatible endpoint (`/v1/listen`)**: pass `Authorization: Token YOUR_API_KEY`.
+- **OpenAI-compatible endpoints (`/v1/audio/transcriptions`, `/v1/audio/translations`)**: pass `Authorization: Bearer YOUR_API_KEY` (also accepts `Token YOUR_API_KEY`).
 
 <Tabs>
-  <TabItem label="cURL">
+  <TabItem label="cURL (Deepgram)">
   ```bash
   curl -X POST 'http://localhost:7860/v1/listen' \
     -H "Authorization: Token YOUR_API_KEY" \
     -H "Content-Type: audio/wav" \
     --data-binary @audio.wav
+  ```
+  </TabItem>
+  <TabItem label="cURL (OpenAI)">
+  ```bash
+  curl -X POST 'http://localhost:7860/v1/audio/transcriptions' \
+    -H "Authorization: Bearer YOUR_API_KEY" \
+    -F "file=@audio.wav" \
+    -F "model=whisper-1"
   ```
   </TabItem>
   <TabItem label="Python">

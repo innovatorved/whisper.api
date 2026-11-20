@@ -4,32 +4,46 @@ description: Managing whisper.cpp GGML models — available sizes, quantization 
 ---
 
 
-The Whisper API uses **GGML-format** model files (`.bin`) compatible with [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Files live under `MODELS_DIR` (default `models/`). The server exposes a **fixed registry** in code (`model_names` in `app/utils/constant.py`): `GET /v1/models` lists registry entries whose matching `.bin` file exists on disk. On startup, missing registry models can be downloaded automatically (see `app/utils/checks.py`).
+The Whisper API uses **GGML-format** model files (`.bin`) compatible with [whisper.cpp](https://github.com/ggml-org/whisper.cpp). Files live under `MODELS_DIR` (default `models/`). The server exposes a **registered catalog** in `app/utils/constant.py` (`model_names` & `MODEL_ALIASES`):
+
+- `GET /v1/models` lists installed transcription models (pass `?include_uninstalled=true` to see all registered models including Silero VAD).
+- On startup, only lightweight `DEFAULT_STARTUP_MODELS` (`tiny.en`, `tiny.en.q5`, `base.en.q5`) are checked/downloaded automatically so boot stays fast. Larger models are downloaded on demand via `python -m app.cli download <model>`.
 
 ---
 
-## Available Model Sizes
+## Registered Models
 
-| Model | Parameters | Disk Size | Relative Speed | Best For |
-|-------|-----------|-----------|----------------|----------|
-| `tiny` | 39M | ~75 MB | Fastest | Quick prototyping, low-resource devices |
-| `tiny.en` | 39M | ~75 MB | Fastest | English-only, highest speed |
-| `base` | 74M | ~142 MB | Fast | Good balance for English |
-| `base.en` | 74M | ~142 MB | Fast | English-only with better accuracy |
-| `small` | 244M | ~466 MB | Medium | Multi-language, good accuracy |
-| `small.en` | 244M | ~466 MB | Medium | English-only, recommended for production |
-| `medium` | 769M | ~1.5 GB | Slow | High accuracy, multi-language |
-| `medium.en` | 769M | ~1.5 GB | Slow | English-only, near-best accuracy |
-| `large-v2` | 1550M | ~3.1 GB | Slowest | Maximum accuracy, all languages |
-| `large-v3` | 1550M | ~3.1 GB | Slowest | Latest full multilingual model |
-| `large-v3-turbo` | 809M | ~1.6 GB | Fast | Pruned decoder (`large-v3` quality at ~4× speed) |
-| `large-v3-turbo.q5` | 809M | ~574 MB | Very Fast | **Recommended** multilingual model (`q5_0`) |
-| `large-v3-turbo.q8` | 809M | ~874 MB | Fast | High-precision quantized `large-v3-turbo` (`q8_0`) |
-| `silero-v6.2.0` | VAD | ~885 KB | Instant | Silero Voice Activity Detection (`vad=true`) |
+| Model ID | Disk Size | Language | Quantization | Best For |
+|----------|-----------|----------|--------------|----------|
+| `tiny.en` | ~75 MB | English | Full | Fastest inference, low-resource devices *(startup default)* |
+| `tiny.en.q5` | ~30 MB | English | `q5_1` | Ultra-lightweight, lowest memory *(startup default)* |
+| `base.en` | ~142 MB | English | Full | Fast English transcription with better accuracy |
+| `base.en.q5` | ~57 MB | English | `q5_1` | Balanced speed and accuracy *(startup default)* |
+| `small.en` | ~466 MB | English | Full | Strong accuracy for production English workloads |
+| `small.en.q5` | ~181 MB | English | `q5_1` | Great English accuracy-to-memory ratio |
+| `medium.en` | ~1.5 GB | English | Full | High accuracy for complex English audio |
+| `large-v3` | ~2.9 GB | Multilingual (99) | Full | Maximum accuracy across all supported languages |
+| `large-v3-turbo` | ~1.5 GB | Multilingual (99) | Full | Near `large-v3` quality at ~4× faster decoding |
+| `large-v3-turbo.q5` | ~547 MB | Multilingual (99) | `q5_0` | **Recommended** multilingual speed/accuracy/memory tradeoff |
+| `large-v3-turbo.q8` | ~834 MB | Multilingual (99) | `q8_0` | Near-lossless quantized `large-v3-turbo` |
+| `silero-v6.2.0` | ~885 KB | Agnostic | VAD | Silero Voice Activity Detection (`vad=true`) |
 
 <Aside type="tip">
   For most production workloads, **`large-v3-turbo.q5`** (multilingual) or **`small.en.q5`** (English-only) offers the best balance of speed, memory footprint, and transcription accuracy. You can also pass `model=whisper-1` for OpenAI SDK compatibility.
 </Aside>
+
+### Model Aliases
+
+The API automatically resolves common OpenAI and Hugging Face model aliases to their canonical registered IDs:
+
+| Alias | Resolves To |
+|-------|-------------|
+| `whisper-1` | `tiny.en` |
+| `large-v3-turbo-q5_0` | `large-v3-turbo.q5` |
+| `large-v3-turbo-q8_0` | `large-v3-turbo.q8` |
+| `tiny.en-q5_1` | `tiny.en.q5` |
+| `base.en-q5_1` | `base.en.q5` |
+| `small.en-q5_1` | `small.en.q5` |
 
 ---
 
@@ -82,12 +96,18 @@ curl -L -o models/ggml-base.en.bin \
   "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"
 ```
 
-### From the Setup Script
+### From the Setup Scripts
 
-The `setup_whisper.sh` script automatically downloads the `tiny.en` model if none exists:
+The `setup_whisper.sh` (macOS/Linux) and `setup_whisper.ps1` (Windows) scripts automatically download the `tiny.en` model if none exists:
 
 ```bash
+# macOS & Linux
 ./setup_whisper.sh
+```
+
+```powershell
+# Windows (PowerShell)
+.\setup_whisper.ps1
 ```
 
 ---
@@ -120,28 +140,32 @@ The `setup_whisper.sh` script automatically downloads the `tiny.en` model if non
 
 ---
 
-## Model File Naming
+## Model File Mapping
 
-The API uses the model filename (without `ggml-` prefix and `.bin` suffix) as the model identifier in API requests:
+Each registered model ID in `app/utils/constant.py` maps to a specific `.bin` filename under `MODELS_DIR`:
 
-| File Name | API `model` Parameter |
-|-----------|----------------------|
-| `ggml-tiny.en.bin` | `tiny.en` |
-| `ggml-model-whisper-small.en-q5_1.bin` | `model-whisper-small.en-q5_1` |
-| `ggml-base.en.bin` | `base.en` |
+| API `model` Parameter | File Name in `MODELS_DIR` |
+|-----------------------|---------------------------|
+| `tiny.en` *(or `whisper-1`)* | `ggml-tiny.en.bin` |
+| `tiny.en.q5` | `ggml-model-whisper-tiny.en-q5_1.bin` |
+| `base.en.q5` | `ggml-model-whisper-base.en-q5_1.bin` |
+| `small.en.q5` | `ggml-small.en-q5_1.bin` |
+| `large-v3-turbo.q5` | `ggml-large-v3-turbo-q5_0.bin` |
+| `silero-v6.2.0` | `ggml-silero-v6.2.0.bin` |
 
 ---
 
 ## Model Directory Configuration
 
-The model directory is configured via the `MODELS_DIR` environment variable:
+The model and VAD paths are configured via environment variables:
 
 ```ini
 # .env
 MODELS_DIR=./models
+VAD_MODEL_PATH=./models/ggml-silero-v6.2.0.bin
 ```
 
-Only **registered** models (see `model_names`) with a present file under `MODELS_DIR` are listed and accepted by `/v1/listen`.
+Only **registered** models (see `model_names` and `MODEL_ALIASES`) with a present file under `MODELS_DIR` are listed by `GET /v1/models` and accepted by `/v1/listen` and `/v1/audio/*`. Pass `GET /v1/models?include_uninstalled=true` to inspect all registered models regardless of download status.
 
 <Aside type="note">
   The `models/` directory is included in `.gitignore` by default — model files are too large for version control. Download them during deployment or include them in your Docker image.

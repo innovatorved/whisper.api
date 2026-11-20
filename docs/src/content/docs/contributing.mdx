@@ -51,8 +51,13 @@ Thank you for considering contributing to the Whisper API! We welcome all contri
 
 6. **Build the whisper binary**:
    ```bash
+   # macOS & Linux
    chmod +x setup_whisper.sh
    ./setup_whisper.sh
+   ```
+   ```powershell
+   # Windows (PowerShell)
+   .\setup_whisper.ps1
    ```
 
 7. **Initialize the database**:
@@ -80,7 +85,15 @@ pytest
 pytest --cov=app --cov-report=term-missing
 
 # Run a specific test file
-pytest app/tests/test_api.py -v
+pytest app/tests/test_api/test_audio_openai.py -v
+```
+
+### Running the Documentation Site Locally
+
+```bash
+cd docs
+bun install
+bun run dev
 ```
 
 ---
@@ -154,7 +167,8 @@ whisper.api/
 ├── app/
 │   ├── api/
 │   │   ├── endpoints/
-│   │   │   ├── listen.py      # POST /v1/listen & WS /v1/listen
+│   │   │   ├── audio.py       # POST /v1/audio/transcriptions & /translations (OpenAI)
+│   │   │   ├── listen.py      # POST /v1/listen & WS /v1/listen (Deepgram)
 │   │   │   ├── models.py      # GET /v1/models
 │   │   │   └── auth.py        # POST /v1/auth/test-token
 │   │   └── models/            # Pydantic request/response schemas
@@ -163,15 +177,16 @@ whisper.api/
 │   │   ├── database.py        # SQLAlchemy setup
 │   │   ├── errors.py          # Error handlers
 │   │   └── models/            # Database models (ApiKey)
-│   ├── utils/                 # Helper functions
-│   ├── tests/                 # Test suite
-│   ├── cli.py                 # Offline key management CLI
+│   ├── utils/                 # Helper functions & model registry
+│   ├── tests/                 # Test suite (unit, API, E2E)
+│   ├── cli.py                 # Offline key & model management CLI
 │   └── main.py                # FastAPI app entry point
 ├── binary/                    # whisper-cli binary (built from source)
 ├── models/                    # GGML model files (.bin)
-├── docs/                      # Markdown documentation
+├── docs/                      # Astro 7 + Tailwind CSS v4 documentation site
 ├── examples/                  # Example scripts
-├── setup_whisper.sh           # Build script for whisper.cpp
+├── setup_whisper.sh           # Build script for macOS & Linux
+├── setup_whisper.ps1          # Build script for Windows (PowerShell)
 ├── requirements.txt           # Python dependencies
 ├── Dockerfile                 # Container build
 └── .env.example               # Environment template

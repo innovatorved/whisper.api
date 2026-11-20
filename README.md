@@ -31,7 +31,7 @@ This project provides both **Deepgram-compatible** (`/v1/listen` REST & WebSocke
 
 ## Documentation
 
-Documentation lives in the `docs/` folder (Astro 6 + Tailwind CSS v4). Run it locally with Bun:
+Documentation is live at **[whisper.vedgupta.in](https://whisper.vedgupta.in)** and lives in the `docs/` folder (Astro 7 + Tailwind CSS v4). Run it locally with Bun:
 
 ```bash
 cd docs && bun install && bun run dev

@@ -12,17 +12,19 @@ Before you begin, make sure you have the following installed:
 
 | Requirement | Version | Purpose |
 |-------------|---------|---------|
-| **Python** | 3.10+ | Runtime for the FastAPI server |
+| **Python** | 3.11+ | Runtime for the FastAPI server |
 | **pip** | Latest | Python package manager |
-| **FFmpeg** | Any | Audio transcoding to 16kHz WAV |
+| **FFmpeg** | Any | Audio/video transcoding to 16kHz WAV |
 | **Git** | Any | Clone the repository |
 | **CMake** | 3.14+ | Build whisper.cpp from source |
-| **C++ Compiler** | g++ or clang++ | Compile the whisper binary |
+| **C++ Compiler** | g++, clang++, or MSVC | Compile the whisper binary |
 
 <Aside type="tip">
-  On macOS, install prerequisites with: `brew install ffmpeg cmake`
-  
+  On macOS: `brew install ffmpeg cmake`
+
   On Ubuntu/Debian: `sudo apt-get install ffmpeg cmake build-essential`
+
+  On Windows: install Git, CMake, FFmpeg, and Visual Studio Build Tools (or MinGW) via `winget` or `choco`.
 </Aside>
 
 ---
@@ -84,6 +86,7 @@ Before you begin, make sure you have the following installed:
    # Whisper binary & models
    WHISPER_BINARY_PATH=./binary/whisper-cli
    MODELS_DIR=./models
+   VAD_MODEL_PATH=./models/ggml-silero-v6.2.0.bin
 
    # Concurrency
    MAX_CONCURRENT_TRANSCRIPTIONS=2
@@ -118,11 +121,15 @@ Before you begin, make sure you have the following installed:
      The script automatically detects your platform (**macOS Apple Silicon/Intel with Metal & Accelerate**, **Linux x86_64/ARM64/CUDA**, or **Windows MSVC/MinGW**), builds `whisper-cli`, and downloads the default `tiny.en` model.
    </Aside>
 
-6. **Initialize the Database & Create an API Key**
+6. **Initialize the Database, Create an API Key & Download Models**
 
    ```bash
    python -m app.cli init
    python -m app.cli create --name "MyFirstKey"
+
+   # Optional: list registered models and download additional ones
+   python -m app.cli models
+   python -m app.cli download large-v3-turbo.q5
    ```
 
    Save the generated token — you'll need it for all API requests.
@@ -159,12 +166,26 @@ Open [http://localhost:7860/docs](http://localhost:7860/docs) in your browser to
 
 ### First Transcription
 
-```bash
-curl -X POST 'http://localhost:7860/v1/listen' \
-  -H "Authorization: Token YOUR_API_KEY" \
-  -H "Content-Type: audio/wav" \
-  --data-binary @audio/jfk.wav
-```
+<Tabs>
+  <TabItem label="Deepgram Format (/v1/listen)">
+  ```bash
+  curl -X POST 'http://localhost:7860/v1/listen?model=tiny.en' \
+    -H "Authorization: Token YOUR_API_KEY" \
+    -H "Content-Type: audio/wav" \
+    --data-binary @audio/jfk.wav
+  ```
+  </TabItem>
+  <TabItem label="OpenAI Format (/v1/audio/transcriptions)">
+  ```bash
+  curl -X POST 'http://localhost:7860/v1/audio/transcriptions' \
+    -H "Authorization: Bearer YOUR_API_KEY" \
+    -F "file=@audio/jfk.wav" \
+    -F "model=whisper-1" \
+    -F "response_format=verbose_json" \
+    -F "timestamp_granularities[]=word"
+  ```
+  </TabItem>
+</Tabs>
 
 ---
 
@@ -175,8 +196,9 @@ curl -X POST 'http://localhost:7860/v1/listen' \
 | `SECRET_KEY` | — | **Required.** Secret for token hashing |
 | `SERVER_HOST` | `http://localhost:7860` | Public server URL |
 | `DATABASE_URL` | `sqlite:///./whisper.db` | SQLAlchemy database connection string |
-| `WHISPER_BINARY_PATH` | `./binary/whisper-cli` | Path to the compiled whisper-cli binary |
+| `WHISPER_BINARY_PATH` | `./binary/whisper-cli` | Path to the compiled whisper-cli binary (auto-resolves `.exe` on Windows) |
 | `MODELS_DIR` | `./models` | Directory containing `.bin` model files |
+| `VAD_MODEL_PATH` | `./models/ggml-silero-v6.2.0.bin` | Path to the Silero VAD GGML model used when `vad=true` |
 | `MAX_CONCURRENT_TRANSCRIPTIONS` | `2` | Max parallel transcription processes |
 | `STREAM_CHUNK_DURATION_MS` | `2000` | WebSocket: target wall-clock buffer length per chunk (ms); PCM sizing uses client `sample_rate` |
 | `MAX_AUDIO_UPLOAD_BYTES` | `52428800` (50 MiB) | Max size for raw or multipart upload bodies |
@@ -195,6 +217,7 @@ curl -X POST 'http://localhost:7860/v1/listen' \
 
 ## Next Steps
 
-- [Set up authentication](/authentication/) — manage API keys with the CLI
-- [Explore the API](/api-reference/) — full endpoint reference
-- [Deploy with Docker](/docker/) — containerized production setup
+- [Set up authentication](/docs/authentication) — manage API keys with the CLI
+- [Explore the API](/docs/api-reference) — full Deepgram & OpenAI endpoint reference
+- [Manage models](/docs/models) — download `large-v3-turbo`, quantized models, and Silero VAD
+- [Deploy with Docker](/docs/docker) — containerized production setup

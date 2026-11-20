@@ -18,7 +18,7 @@ The Whisper API provides both a **Deepgram-compatible** REST & WebSocket interfa
 | <span class="badge badge-get">GET</span> | `/v1/models` | List available & registered models (no auth) |
 | <span class="badge badge-get">GET</span> | `/ping` | Health check |
 | <span class="badge badge-post">POST</span> | `/v1/auth/test-token` | Generate test token (dev only) |
-| <span class="badge badge-ws">WS</span> | `/v1/listen` | Live streaming (see [Streaming docs](/streaming/)) |
+| <span class="badge badge-ws">WS</span> | `/v1/listen` | Live streaming (see [Streaming docs](/docs/streaming)) |
 
 ---
 
@@ -49,7 +49,7 @@ The primary Deepgram-compatible transcription endpoint. Accepts audio either as 
 | Header | Value | Required |
 |--------|-------|----------|
 | `Authorization` | `Token <your_api_key>` | Yes |
-| `Content-Type` | `audio/wav`, `audio/mpeg`, `audio/mp4`, etc. | For file upload |
+| `Content-Type` | `audio/*` (`wav`, `mpeg`, `mp4`, `ogg`, `flac`, `webm`) or `video/*` (`mp4`, `webm`, `quicktime`, `x-matroska`) | For file upload |
 | `Content-Type` | `application/json` | For URL-based transcription |
 
 ---
@@ -164,6 +164,10 @@ ask not what your country can do for you
 ask what you can do for your country
 ```
 
+### Plain Text Response
+
+When `response_format=text`, the server returns the plain transcript string with `Content-Type: text/plain`.
+
 ---
 
 ## POST `/v1/audio/transcriptions` & `/v1/audio/translations` — OpenAI Audio API
@@ -176,33 +180,86 @@ Drop-in compatible with the OpenAI Audio API (`client.audio.transcriptions.creat
 |-------|------|---------|-------------|
 | `file` | `file` | *(required)* | Audio or video file to transcribe/translate (`wav`, `mp3`, `m4a`, `mp4`, `webm`, etc.). |
 | `model` | `string` | `whisper-1` | Model ID or alias (`whisper-1`, `tiny.en`, `large-v3-turbo.q5`, etc.). |
-| `language` | `string` | `auto` | ISO-639-1 language code (`en`, `fr`, `de`, etc.). |
+| `language` | `string` | `auto` | ISO-639-1 language code (`en`, `fr`, `de`, etc.). *Transcriptions only.* |
 | `prompt` | `string` | `null` | Optional text prompt to guide style or vocabulary. |
 | `response_format` | `string` | `json` | One of `json`, `verbose_json`, `text`, `srt`, or `vtt`. |
 | `temperature` | `float` | `null` | Sampling temperature between `0.0` and `1.0`. |
-| `timestamp_granularities[]` | `string[]` | `["segment"]` | Include `"word"` and/or `"segment"` timestamps when `response_format=verbose_json`. |
+| `timestamp_granularities[]` | `string[]` | `["segment"]` | Include `"word"` and/or `"segment"` timestamps when `response_format=verbose_json`. *Transcriptions only.* |
 | `vad` | `boolean` | `false` | Enable Silero VAD (`silero-v6.2.0`) when installed. |
 
-### Example Request (`verbose_json` with Word Timestamps)
+### Example Requests
 
-```bash
-curl -X POST 'http://localhost:7860/v1/audio/transcriptions' \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -F "file=@audio/jfk.wav" \
-  -F "model=whisper-1" \
-  -F "response_format=verbose_json" \
-  -F "timestamp_granularities[]=word" \
-  -F "timestamp_granularities[]=segment"
+<Tabs>
+  <TabItem label="Transcription (verbose_json)">
+  ```bash
+  curl -X POST 'http://localhost:7860/v1/audio/transcriptions' \
+    -H "Authorization: Bearer YOUR_API_KEY" \
+    -F "file=@audio/jfk.wav" \
+    -F "model=whisper-1" \
+    -F "response_format=verbose_json" \
+    -F "timestamp_granularities[]=word" \
+    -F "timestamp_granularities[]=segment"
+  ```
+  </TabItem>
+  <TabItem label="Translation to English">
+  ```bash
+  curl -X POST 'http://localhost:7860/v1/audio/translations' \
+    -H "Authorization: Bearer YOUR_API_KEY" \
+    -F "file=@spanish_clip.mp3" \
+    -F "model=large-v3-turbo.q5" \
+    -F "response_format=json"
+  ```
+  </TabItem>
+</Tabs>
+
+### OpenAI Response Schemas
+
+When `response_format=json` (default):
+
+```json
+{
+  "text": "And so my fellow Americans ask not what your country can do for you ask what you can do for your country"
+}
+```
+
+When `response_format=verbose_json` with `timestamp_granularities[]=word` and `timestamp_granularities[]=segment`:
+
+```json
+{
+  "task": "transcribe",
+  "language": "en",
+  "duration": 10.43,
+  "text": "And so my fellow Americans ask not what your country can do for you ask what you can do for your country",
+  "segments": [
+    {
+      "id": 0,
+      "seek": 0,
+      "start": 0.0,
+      "end": 10.43,
+      "text": "And so my fellow Americans ask not what your country can do for you ask what you can do for your country",
+      "avg_logprob": -0.04,
+      "no_speech_prob": 0.01
+    }
+  ],
+  "words": [
+    { "word": "And", "start": 0.0, "end": 0.32 },
+    { "word": "so", "start": 0.32, "end": 0.56 }
+  ]
+}
 ```
 
 ---
 
 ## GET `/v1/models` — List Models
 
-Returns metadata for each `.bin` model file present under `MODELS_DIR`. **No authentication required.**
+Returns metadata for each `.bin` model file present under `MODELS_DIR`. Pass `?include_uninstalled=true` to also list registered models (and `silero-v6.2.0`) that have not been downloaded yet. **No authentication required.**
 
 ```bash
+# Installed transcription models only
 curl -X GET 'http://localhost:7860/v1/models'
+
+# All registered models (including not yet downloaded)
+curl -X GET 'http://localhost:7860/v1/models?include_uninstalled=true'
 ```
 
 **Response:**
@@ -217,6 +274,7 @@ curl -X GET 'http://localhost:7860/v1/models'
       "language": "en",
       "version": "ggml-v1",
       "file": "ggml-tiny.en.bin",
+      "installed": true,
       "size_bytes": 78643200
     }
   ],

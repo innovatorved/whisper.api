@@ -1,6 +1,6 @@
 ---
 title: Code Examples
-description: Production-ready code snippets for cURL, Python, and JavaScript — file upload, URL transcription, streaming, and diagnostics.
+description: Production-ready code snippets for cURL, Python, JavaScript, and the OpenAI SDK — file upload, translation, URL transcription, streaming, and diagnostics.
 ---
 
 
@@ -8,7 +8,86 @@ Complete, copy-paste-ready examples for integrating with the Whisper API. Replac
 
 ---
 
-## File Upload
+## OpenAI-Compatible Audio API
+
+Use the official OpenAI Python/JS SDKs or cURL directly against `/v1/audio/transcriptions` and `/v1/audio/translations` by pointing `base_url` to your Whisper API server:
+
+<Tabs>
+  <TabItem label="Python (OpenAI SDK)">
+  ```python
+  from openai import OpenAI
+
+  client = OpenAI(
+      api_key="YOUR_API_KEY",
+      base_url="http://localhost:7860/v1",
+  )
+
+  # Transcribe with word-level & segment-level timestamps
+  with open("audio/jfk.wav", "rb") as audio_file:
+      transcript = client.audio.transcriptions.create(
+          model="whisper-1",
+          file=audio_file,
+          response_format="verbose_json",
+          timestamp_granularities=["word", "segment"],
+      )
+
+  print(transcript.text)
+  for word in transcript.words:
+      print(f"{word.start:.2f}s - {word.end:.2f}s: {word.word}")
+
+  # Translate non-English speech to English
+  with open("spanish_clip.mp3", "rb") as audio_file:
+      translation = client.audio.translations.create(
+          model="large-v3-turbo.q5",
+          file=audio_file,
+      )
+
+  print(translation.text)
+  ```
+  </TabItem>
+  <TabItem label="JavaScript (OpenAI SDK)">
+  ```javascript
+  import fs from 'fs';
+  import OpenAI from 'openai';
+
+  const client = new OpenAI({
+    apiKey: 'YOUR_API_KEY',
+    baseURL: 'http://localhost:7860/v1',
+  });
+
+  const transcript = await client.audio.transcriptions.create({
+    model: 'whisper-1',
+    file: fs.createReadStream('audio/jfk.wav'),
+    response_format: 'verbose_json',
+    timestamp_granularities: ['word', 'segment'],
+  });
+
+  console.log(transcript.text);
+  console.log(transcript.words);
+  ```
+  </TabItem>
+  <TabItem label="cURL">
+  ```bash
+  # Transcription with word timestamps
+  curl -X POST 'http://localhost:7860/v1/audio/transcriptions' \
+    -H "Authorization: Bearer YOUR_API_KEY" \
+    -F "file=@audio/jfk.wav" \
+    -F "model=whisper-1" \
+    -F "response_format=verbose_json" \
+    -F "timestamp_granularities[]=word"
+
+  # Translation to English
+  curl -X POST 'http://localhost:7860/v1/audio/translations' \
+    -H "Authorization: Bearer YOUR_API_KEY" \
+    -F "file=@spanish_clip.mp3" \
+    -F "model=large-v3-turbo.q5"
+  ```
+  </TabItem>
+</Tabs>
+
+---
+
+## File Upload (Deepgram Format)
 
 Transcribe a local audio file by sending raw bytes:
 
@@ -151,9 +230,29 @@ curl -X POST 'http://localhost:7860/v1/listen?prompt=MUTTON,TURNIPS,KUBERNETES' 
   Prompting is especially useful for proper nouns, technical terms, and acronyms that the model might otherwise misrecognize.
 </Aside>
 
+### Silero VAD, Translation & Decoding Parameters
+
+Enable Silero Voice Activity Detection (`vad=true`), translate to English (`translate=true`), and tune decoding options (`temperature`, `beam_size`, `split_on_word`):
+
+```bash
+curl -X POST 'http://localhost:7860/v1/listen?model=large-v3-turbo.q5&translate=true&vad=true&beam_size=5&temperature=0.0&split_on_word=true' \
+  -H "Authorization: Token YOUR_API_KEY" \
+  -H "Content-Type: audio/mpeg" \
+  --data-binary @interview.mp3
+```
+
 ---
 
-## Subtitle Export
+## Subtitle & Plain-Text Export
+
+### Plain Text Format
+
+```bash
+curl -X POST 'http://localhost:7860/v1/listen?response_format=text' \
+  -H "Authorization: Token YOUR_API_KEY" \
+  -H "Content-Type: audio/wav" \
+  --data-binary @audio.wav
+```
 
 ### SRT Format
 
@@ -247,7 +346,11 @@ wscat -c "ws://localhost:7860/v1/listen?token=YOUR_API_KEY&model=tiny.en"
 ### Check Available Models
 
 ```bash
+# Installed transcription models
 curl -X GET 'http://localhost:7860/v1/models'
+
+# All registered models (including uninstalled & Silero VAD)
+curl -X GET 'http://localhost:7860/v1/models?include_uninstalled=true'
 ```
 
 ### Health Check

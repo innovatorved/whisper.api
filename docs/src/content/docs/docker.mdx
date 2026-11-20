@@ -43,10 +43,10 @@ Here's a detailed breakdown of the Dockerfile:
 ### Base Image
 
 ```dockerfile
-FROM python:3.10-slim-bookworm
+FROM python:3.12-slim-bookworm
 ```
 
-Uses Python 3.10 on Debian Bookworm (slim) for a minimal footprint with modern system libraries.
+Uses Python 3.12 on Debian Bookworm (slim) for a minimal footprint with modern system libraries.
 
 ### Environment Setup
 
@@ -117,8 +117,9 @@ docker run -d \
   -e SECRET_KEY="strong-random-secret-here" \
   -e DATABASE_URL="sqlite:///./whisper.db" \
   -e MODELS_DIR="./models" \
+  -e VAD_MODEL_PATH="./models/ggml-silero-v6.2.0.bin" \
   -e MAX_CONCURRENT_TRANSCRIPTIONS=4 \
-  -e STREAM_CHUNK_DURATION_MS=3000 \
+  -e STREAM_CHUNK_DURATION_MS=2000 \
   -e MAX_AUDIO_UPLOAD_BYTES=52428800 \
   -e MAX_AUDIO_DOWNLOAD_BYTES=52428800 \
   -e AUDIO_URL_FOLLOW_REDIRECTS=false \
@@ -129,7 +130,7 @@ docker run -d \
 ```
 
 <Aside type="caution">
-  Keep `ENABLE_TEST_TOKEN_ENDPOINT=false` in production. The image defaults to `false`; only set it to `true` temporarily on trusted dev machines if you need Swagger token minting.
+  Always pass `-e ENABLE_TEST_TOKEN_ENDPOINT=false` in production. The Dockerfile enables it by default for local/Hugging Face Spaces demo convenience, which allows unauthenticated Swagger token minting if left enabled.
 </Aside>
 
 ---
@@ -253,7 +254,7 @@ app_port: 7860
 | Add health check monitoring | Recommended | Use `/ping` endpoint |
 | Tune concurrency | Optional | `MAX_CONCURRENT_TRANSCRIPTIONS` |
 | Tune upload / URL limits | Optional | `MAX_AUDIO_UPLOAD_BYTES`, `MAX_AUDIO_DOWNLOAD_BYTES` |
-| URL redirects | Optional | `AUDIO_URL_FOLLOW_REDIRECTS` — keep `false` unless you need CDN redirects (see [API reference](/api-reference/)) |
+| URL redirects | Optional | `AUDIO_URL_FOLLOW_REDIRECTS` — keep `false` unless you need CDN redirects (see [API reference](/docs/api-reference)) |
 | Subprocess timeouts | Optional | `WHISPER_CLI_TIMEOUT_SEC`, `FFMPEG_TIMEOUT_SEC` |
 | Use larger model | Optional | Mount or bake additional GGML models in `MODELS_DIR` |
 
