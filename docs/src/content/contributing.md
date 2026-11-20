@@ -183,7 +183,7 @@ whisper.api/
 │   └── main.py                # FastAPI app entry point
 ├── binary/                    # whisper-cli binary (built from source)
 ├── models/                    # GGML model files (.bin)
-├── docs/                      # Astro 7 + Tailwind CSS v4 documentation site
+├── docs/                      # Vite + Tailwind CSS v4 documentation site
 ├── examples/                  # Example scripts
 ├── setup_whisper.sh           # Build script for macOS & Linux
 ├── setup_whisper.ps1          # Build script for Windows (PowerShell)

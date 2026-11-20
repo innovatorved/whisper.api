@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
 
 /* ── Self-hosted Geist & Geist Mono (SIL OFL-1.1) ───────────────────────── */
 @font-face {

@@ -2,19 +2,17 @@
   "name": "whisper-api-docs",
   "private": true,
   "type": "module",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@astrojs/mdx": "^8.1.6",
-    "@astrojs/sitemap": "^3.7.6",
-    "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.5",
-    "astro": "^7.4.13",
-    "tailwindcss": "^4.3.5"
+    "marked": "^15.0.12",
+    "tailwindcss": "^4.3.5",
+    "vite": "^6.3.5",
+    "yaml": "^2.7.1"
   }
 }
