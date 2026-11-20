@@ -8,10 +8,15 @@ interface Props {
 const { title, href, description } = Astro.props;
 ---
 
-<a href={href} class="card-bottom-line group not-prose block rounded-xl border border-[var(--line)] bg-[var(--panel)] p-5 transition">
-  <p class="m-0 flex items-center justify-between font-bold text-[var(--text)] group-hover:text-[var(--brand-ink)]">
+<a
+  href={href}
+  class="group block rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)] p-4 no-underline transition-colors hover:border-[var(--ds-border-strong)] hover:bg-[var(--ds-surface-hover)]"
+>
+  <p class="m-0 flex items-center justify-between text-[14px] font-semibold text-[var(--ds-ink)]">
     <span>{title}</span>
-    <span class="text-[var(--brand)] transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>
+    <span class="text-[var(--ds-ink-faint)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--ds-ink)]" aria-hidden="true">→</span>
   </p>
-  {description && <p class="m-0 mt-1.5 text-sm leading-relaxed text-[var(--muted)]">{description}</p>}
+  {description && (
+    <p class="m-0 mt-1 text-[13px] leading-[1.55] text-[var(--ds-ink-muted)]">{description}</p>
+  )}
 </a>

@@ -43,20 +43,23 @@ interface Props {
 
 const { title, description, hero, navItems, currentSlug, headings, prevItem, nextItem, searchItems } = Astro.props;
 const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
+const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light" />
     <script is:inline>
       (() => {
-        const root = document.documentElement;
-        root.style.backgroundColor = "#F8FAFC";
-        root.style.color = "#0F172A";
-        root.style.colorScheme = "light";
+        const stored = localStorage.getItem("whisper-docs-theme");
+        const theme = stored === "dark" || stored === "light"
+          ? stored
+          : window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
     <ClientRouter />
@@ -68,19 +71,20 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="shortcut icon" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/logo.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
   </head>
 
-  <body>
-    <header class="sticky top-0 z-40 border-b border-[var(--line)] bg-white/90 backdrop-blur-md">
-      <div class="mx-auto flex h-16 w-full max-w-[1500px] items-center justify-between px-3 sm:px-4 lg:px-5">
-        <a href="/docs" class="group flex items-center gap-2.5 transition-opacity hover:opacity-90">
-          <svg viewBox="0 0 40 40" class="h-8 w-8 shrink-0" aria-hidden="true">
+  <body class="min-h-screen bg-[var(--ds-canvas)] text-[var(--ds-ink)]">
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-3 focus:z-50 focus:rounded-md focus:bg-[var(--brand-accent)] focus:px-3 focus:py-1.5 focus:text-xs focus:font-medium focus:text-[var(--brand-accent-ink)]"
+    >
+      Skip to content
+    </a>
+
+    <header class="sticky top-0 z-40 h-14 border-b border-[var(--ds-border)] bg-[var(--ds-topbar-bg)] backdrop-blur-md">
+      <div class="mx-auto flex h-full w-full max-w-[1320px] items-center justify-between gap-4 px-4 sm:px-6">
+        <a href="/docs" class="flex items-center gap-2.5 transition-opacity hover:opacity-85">
+          <svg viewBox="0 0 40 40" class="h-7 w-7 shrink-0" aria-hidden="true">
             <rect x="4" y="15" width="4" height="10" rx="2" fill="#F97316" />
             <rect x="11" y="10" width="4" height="20" rx="2" fill="#F97316" />
             <rect x="18" y="4" width="4" height="32" rx="2" fill="#F97316" />
@@ -88,36 +92,58 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
             <rect x="32" y="15" width="4" height="10" rx="2" fill="#F97316" />
           </svg>
           <span class="flex items-center gap-1.5">
-            <span class="text-xl font-extrabold tracking-tight text-[#0F172A]">whisper</span>
-            <span class="rounded-md bg-[#F97316] px-1.5 py-0.5 font-mono text-[11px] font-bold tracking-wide text-white">API</span>
+            <span class="text-[17px] font-bold tracking-[-0.03em] text-[var(--ds-ink)]">whisper</span>
+            <span class="rounded bg-[#F97316] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-white">API</span>
           </span>
         </a>
 
-        <div class="flex items-center gap-3">
-          <span class="hidden rounded-full border border-[var(--brand-border)] bg-[var(--brand-soft)] px-2.5 py-0.5 font-mono text-xs font-semibold text-[var(--brand-ink)] sm:inline-flex">
-            v2.1.0
-          </span>
-
-          <div class="relative hidden w-[300px] md:block">
+        <div class="flex items-center gap-2">
+          <div class="relative hidden w-[260px] md:block">
             <input
               id="docs-search-input"
               type="search"
               placeholder="Search docs..."
+              aria-label="Search documentation"
               autocomplete="off"
               data-search-items={JSON.stringify(searchItems)}
-              class="w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-4 py-2 text-sm text-[var(--text)] placeholder-[var(--muted)] transition-all focus:border-[var(--brand)] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#F97316]/20"
+              class="h-8 w-full rounded-md border border-[var(--ds-border)] bg-[var(--ds-surface)] pl-3 pr-12 text-[13px] text-[var(--ds-ink)] placeholder-[var(--ds-ink-faint)] transition-colors focus:border-[var(--ds-border-strong)] focus:outline-none"
             />
-            <div id="docs-search-results" class="hidden absolute right-0 top-[calc(100%+0.35rem)] z-50 max-h-80 w-[360px] overflow-y-auto rounded-lg border border-[var(--line)] bg-[var(--panel)] p-1 shadow-[var(--shadow-lg)]"></div>
+            <kbd class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-[var(--ds-border)] bg-[var(--ds-canvas-subtle)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--ds-ink-faint)]">
+              ⌘K
+            </kbd>
+            <div
+              id="docs-search-results"
+              class="hidden absolute right-0 top-[calc(100%+6px)] z-50 max-h-80 w-[340px] overflow-y-auto rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)] p-1 shadow-[var(--ds-shadow-overlay)]"
+            ></div>
           </div>
+
+          <span class="hidden h-8 items-center rounded-md border border-[var(--ds-border)] bg-[var(--ds-surface)] px-2 font-mono text-[11px] font-medium text-[var(--ds-ink-muted)] sm:inline-flex">
+            v2.1.0
+          </span>
+
+          <button
+            id="theme-toggle-btn"
+            type="button"
+            aria-label="Toggle dark mode"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--ds-border)] bg-[var(--ds-surface)] text-[var(--ds-ink-muted)] transition-colors hover:bg-[var(--ds-surface-hover)] hover:text-[var(--ds-ink)]"
+          >
+            <svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="hidden h-4 w-4">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41"></path>
+            </svg>
+            <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
 
           <a
             href="https://github.com/innovatorved/whisper.api"
-            aria-label="GitHub"
+            aria-label="GitHub repository"
             target="_blank"
             rel="noreferrer"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line)] bg-white text-[var(--text)] transition-all hover:border-[var(--brand-border)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand-ink)]"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--ds-border)] bg-[var(--ds-surface)] text-[var(--ds-ink-muted)] transition-colors hover:bg-[var(--ds-surface-hover)] hover:text-[var(--ds-ink)]"
           >
-            <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current">
+            <svg viewBox="0 0 24 24" class="h-4 w-4 fill-current">
               <path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.66-.22.66-.49 0-.24-.01-1.04-.01-1.88-2.78.62-3.37-1.2-3.37-1.2-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .08 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.08 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.27 9.27 0 0 1 12 6.9c.85 0 1.71.12 2.51.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.95-2.34 4.82-4.57 5.07.36.32.68.95.68 1.92 0 1.39-.01 2.5-.01 2.84 0 .27.17.59.67.49A10.28 10.28 0 0 0 22 12.23C22 6.58 17.52 2 12 2Z" />
             </svg>
           </a>
@@ -125,23 +151,22 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
       </div>
     </header>
 
-    <main class="mx-auto w-full max-w-[1500px] px-3 py-8 sm:px-4 lg:px-5">
-      <div class="grid grid-cols-1 gap-8 lg:grid-cols-[240px_minmax(0,1fr)_240px]">
+    <div class="mx-auto w-full max-w-[1320px] px-4 py-8 sm:px-6">
+      <div class="grid grid-cols-1 items-start gap-10 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,760px)_224px] xl:justify-between">
         <aside class="hidden lg:block">
-          <nav class="sticky top-24 space-y-1">
-            <div class="mb-4 px-3">
-              <p class="text-[11px] font-bold uppercase tracking-widest text-[var(--muted)]">Documentation</p>
-            </div>
+          <nav aria-label="Documentation navigation" class="sticky top-20 space-y-0.5">
+            <p class="mb-2.5 px-2.5 text-[11px] font-medium text-[var(--ds-ink-faint)]">Documentation</p>
             {navItems.map((item) => {
               const href = item.slug === "" ? "/docs" : `/docs/${item.slug}`;
               const isActive = href === active;
               return (
                 <a
                   href={href}
-                  class={`block rounded-lg px-3.5 py-2 text-sm transition-all ${
+                  aria-current={isActive ? "page" : undefined}
+                  class={`block rounded-md px-2.5 py-1.5 text-[13px] leading-snug transition-colors ${
                     isActive
-                      ? "border border-[var(--brand-border)] bg-[var(--brand-soft)] font-semibold text-[var(--brand-ink)]"
-                      : "border border-transparent font-medium text-[var(--muted)] hover:bg-white hover:text-[var(--text)]"
+                      ? "bg-[var(--brand-accent-soft)] font-medium text-[var(--ds-ink)]"
+                      : "text-[var(--ds-ink-muted)] hover:bg-[var(--ds-surface-hover)] hover:text-[var(--ds-ink)]"
                   }`}
                 >
                   {item.title}
@@ -151,10 +176,10 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
           </nav>
         </aside>
 
-        <article class="prose min-w-0 max-w-none rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-[var(--shadow-sm)] sm:p-8 lg:p-10">
-          <details class="not-prose mb-6 rounded-lg border border-[var(--line)] bg-[var(--bg)] p-3.5 lg:hidden">
-            <summary class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-[var(--text)]">
-              <svg class="h-5 w-5 text-[var(--brand)]" fill="currentColor" viewBox="0 0 20 20">
+        <main id="main-content" class="min-w-0 w-full max-w-[760px]">
+          <details class="mb-6 rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)] p-3 lg:hidden">
+            <summary class="flex cursor-pointer items-center gap-2 text-[13px] font-medium text-[var(--ds-ink)]">
+              <svg class="h-4 w-4 text-[var(--ds-ink-muted)]" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fill-rule="evenodd"
                   d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
@@ -163,17 +188,18 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
               </svg>
               Navigation
             </summary>
-            <nav class="mt-3 space-y-1">
+            <nav class="mt-2.5 space-y-0.5 border-t border-[var(--ds-divider)] pt-2.5">
               {navItems.map((item) => {
                 const href = item.slug === "" ? "/docs" : `/docs/${item.slug}`;
                 const isActive = href === active;
                 return (
                   <a
                     href={href}
-                    class={`block rounded-lg px-3.5 py-2 text-sm transition-all ${
+                    aria-current={isActive ? "page" : undefined}
+                    class={`block rounded-md px-2.5 py-1.5 text-[13px] ${
                       isActive
-                        ? "border border-[var(--brand-border)] bg-[var(--brand-soft)] font-semibold text-[var(--brand-ink)]"
-                        : "font-medium text-[var(--muted)] hover:bg-white hover:text-[var(--text)]"
+                        ? "bg-[var(--brand-accent-soft)] font-medium text-[var(--ds-ink)]"
+                        : "text-[var(--ds-ink-muted)] hover:bg-[var(--ds-surface-hover)] hover:text-[var(--ds-ink)]"
                     }`}
                   >
                     {item.title}
@@ -184,33 +210,30 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
           </details>
 
           {hero ? (
-            <div class="not-prose mb-10 flex flex-col items-start gap-6 rounded-xl border border-[var(--line)] bg-gradient-to-br from-white via-white to-[#FFF7ED] p-6 sm:flex-row sm:items-center sm:p-8">
+            <section class="mb-8 flex flex-col items-start gap-6 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-6 sm:flex-row sm:items-center">
               <img
                 src="/logo.png"
-                alt="Whisper API Logo"
-                class="h-28 w-28 shrink-0 rounded-2xl border border-[var(--line)] bg-white object-contain p-2 shadow-[var(--shadow-sm)] sm:h-32 sm:w-32"
+                alt="Whisper API"
+                class="h-24 w-24 shrink-0 rounded-xl border border-[var(--ds-border)] bg-white object-contain p-1.5 sm:h-28 sm:w-28"
               />
               <div class="min-w-0 flex-1">
-                <span class="inline-flex items-center gap-1.5 rounded-full border border-[var(--brand-border)] bg-[var(--brand-soft)] px-2.5 py-0.5 font-mono text-xs font-semibold text-[var(--brand-ink)]">
-                  Self-Hosted Speech-to-Text · v2.1.0
-                </span>
-                <h1 class="mt-3 text-3xl font-extrabold tracking-tight text-[var(--text)] sm:text-4xl">
+                <h1 class="m-0 text-[28px] font-semibold leading-[1.18] tracking-[-0.032em] text-[var(--ds-ink)]">
                   {title}
                 </h1>
                 {hero.tagline && (
-                  <p class="mt-2.5 text-base leading-relaxed text-[var(--muted)]">
+                  <p class="mt-2 text-[15px] leading-[1.6] text-[var(--ds-ink-muted)]">
                     {hero.tagline}
                   </p>
                 )}
                 {hero.actions && hero.actions.length > 0 && (
-                  <div class="mt-5 flex flex-wrap gap-3">
+                  <div class="mt-4 flex flex-wrap items-center gap-2.5">
                     {hero.actions.map((action) => (
                       <a
                         href={action.link}
                         class={
                           action.variant === "primary"
-                            ? "inline-flex items-center gap-2 rounded-lg bg-[#F97316] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#EA580C] hover:text-white"
-                            : "inline-flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--text)] shadow-sm transition hover:border-[var(--brand-border)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand-ink)]"
+                            ? "inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--brand-accent)] px-4 text-[13px] font-medium text-[var(--brand-accent-ink)] transition-colors hover:bg-[var(--brand-accent-hover)]"
+                            : "inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--ds-border)] bg-[var(--ds-surface)] px-4 text-[13px] font-medium text-[var(--ds-ink)] transition-colors hover:bg-[var(--ds-surface-hover)]"
                         }
                       >
                         {action.text}
@@ -220,25 +243,33 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
                   </div>
                 )}
               </div>
-            </div>
+            </section>
           ) : (
-            <div class="not-prose mb-8 border-b border-[var(--line)] pb-6">
-              <h1 class="m-0 text-3xl font-extrabold tracking-tight text-[var(--text)] sm:text-4xl">{title}</h1>
-              {description && <p class="mt-2.5 text-base text-[var(--muted)]">{description}</p>}
-            </div>
+            <header class="mb-8 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-6">
+              <h1 class="m-0 text-[28px] font-semibold leading-[1.18] tracking-[-0.032em] text-[var(--ds-ink)]">
+                {title}
+              </h1>
+              {description && (
+                <p class="mt-2 mb-0 text-[15px] leading-[1.6] text-[var(--ds-ink-muted)]">
+                  {description}
+                </p>
+              )}
+            </header>
           )}
 
-          <slot />
+          <article class="ds-prose">
+            <slot />
+          </article>
 
           {(prevItem || nextItem) && (
-            <div class="not-prose mt-10 grid gap-3 border-t border-[var(--line)] pt-5 sm:grid-cols-2">
+            <nav aria-label="Pagination" class="mt-12 grid gap-3 border-t border-[var(--ds-divider)] pt-6 sm:grid-cols-2">
               {prevItem ? (
                 <a
                   href={prevItem.slug === "" ? "/docs" : `/docs/${prevItem.slug}`}
-                  class="card-bottom-line group rounded-md border border-[var(--line)] bg-[var(--panel)] px-4 py-3 transition-all"
+                  class="group rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)] px-4 py-3 transition-colors hover:border-[var(--ds-border-strong)] hover:bg-[var(--ds-surface-hover)]"
                 >
-                  <p class="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">← Previous</p>
-                  <p class="text-sm font-semibold text-[var(--text)]">{prevItem.title}</p>
+                  <p class="m-0 text-[11px] font-medium text-[var(--ds-ink-faint)]">← Previous</p>
+                  <p class="mt-1 mb-0 text-[14px] font-medium text-[var(--ds-ink)]">{prevItem.title}</p>
                 </a>
               ) : (
                 <div></div>
@@ -247,90 +278,119 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
               {nextItem && (
                 <a
                   href={nextItem.slug === "" ? "/docs" : `/docs/${nextItem.slug}`}
-                  class="card-bottom-line group rounded-md border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-right transition-all"
+                  class="group rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)] px-4 py-3 text-right transition-colors hover:border-[var(--ds-border-strong)] hover:bg-[var(--ds-surface-hover)]"
                 >
-                  <p class="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Next →</p>
-                  <p class="text-sm font-semibold text-[var(--text)]">{nextItem.title}</p>
+                  <p class="m-0 text-[11px] font-medium text-[var(--ds-ink-faint)]">Next →</p>
+                  <p class="mt-1 mb-0 text-[14px] font-medium text-[var(--ds-ink)]">{nextItem.title}</p>
                 </a>
               )}
-            </div>
+            </nav>
           )}
-        </article>
 
-        <aside class="hidden lg:block">
-          <div class="sticky top-24 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 shadow-[var(--shadow-sm)]">
-            <p class="mb-4 text-xs font-bold uppercase tracking-widest text-[var(--text)]">On This Page</p>
-            <nav class="space-y-2 text-sm" id="toc-nav">
-              {headings
-                .filter((h) => h.depth <= 3)
-                .map((heading) => (
+          <footer class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--ds-divider)] pt-6 text-[12px] text-[var(--ds-ink-faint)]">
+            <span>Whisper API · MIT License</span>
+            <div class="flex items-center gap-4">
+              <a href="https://github.com/innovatorved/whisper.api" target="_blank" rel="noreferrer" class="hover:text-[var(--ds-ink)]">
+                GitHub
+              </a>
+              <a href="https://github.com/innovatorved/whisper.cpp" target="_blank" rel="noreferrer" class="hover:text-[var(--ds-ink)]">
+                whisper.cpp Fork
+              </a>
+            </div>
+          </footer>
+        </main>
+
+        <aside class="hidden xl:block">
+          {tocHeadings.length > 0 && (
+            <div class="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto border-l border-[var(--ds-border)] pl-4">
+              <p class="mb-2.5 text-[12px] font-semibold text-[var(--ds-ink)]">On this page</p>
+              <nav class="space-y-0.5" id="toc-nav" aria-label="On this page">
+                {tocHeadings.map((heading) => (
                   <a
                     href={`#${heading.slug}`}
                     data-heading={heading.slug}
-                    class={`block transition-colors ${
-                      heading.depth === 1
-                        ? "toc-link toc-depth-1 font-semibold text-[var(--text)] hover:opacity-80"
-                        : heading.depth === 2
-                          ? "toc-link toc-depth-2 pl-4 font-medium text-[var(--text)] hover:opacity-80"
-                          : "toc-link toc-depth-3 pl-8 text-[var(--muted)] hover:opacity-80"
-                    }`}
+                    class={`ds-toc-link ${heading.depth === 3 ? "pl-5" : ""}`}
                   >
                     {heading.text}
                   </a>
                 ))}
-            </nav>
-          </div>
+              </nav>
+            </div>
+          )}
         </aside>
       </div>
-    </main>
+    </div>
 
     <script is:inline>
       (() => {
-        const activeClass = "is-active";
+        const syncThemeIcons = () => {
+          const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+          const sun = document.getElementById("theme-icon-sun");
+          const moon = document.getElementById("theme-icon-moon");
+          if (sun) sun.classList.toggle("hidden", !isDark);
+          if (moon) moon.classList.toggle("hidden", isDark);
+        };
+
+        const initTheme = () => {
+          const stored = localStorage.getItem("whisper-docs-theme");
+          if (stored === "dark" || stored === "light") {
+            document.documentElement.setAttribute("data-theme", stored);
+          }
+          syncThemeIcons();
+
+          const btn = document.getElementById("theme-toggle-btn");
+          if (btn && btn.dataset.ready !== "true") {
+            btn.dataset.ready = "true";
+            btn.addEventListener("click", () => {
+              const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+              document.documentElement.setAttribute("data-theme", next);
+              localStorage.setItem("whisper-docs-theme", next);
+              syncThemeIcons();
+            });
+          }
+        };
+
+        const initCodeCopy = () => {
+          document.querySelectorAll(".ds-prose pre").forEach((pre) => {
+            if (pre.parentElement?.classList.contains("ds-code-wrap")) return;
+            const wrap = document.createElement("div");
+            wrap.className = "ds-code-wrap";
+            pre.parentNode?.insertBefore(wrap, pre);
+            wrap.appendChild(pre);
+
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "ds-copy-btn";
+            btn.textContent = "Copy";
+            btn.setAttribute("aria-label", "Copy code");
+            btn.addEventListener("click", async () => {
+              const code = pre.querySelector("code")?.textContent ?? pre.textContent ?? "";
+              try {
+                await navigator.clipboard.writeText(code);
+                btn.textContent = "Copied";
+                btn.setAttribute("data-copied", "true");
+                setTimeout(() => {
+                  btn.textContent = "Copy";
+                  btn.removeAttribute("data-copied");
+                }, 1600);
+              } catch {}
+            });
+            wrap.appendChild(btn);
+          });
+        };
 
         const initToc = () => {
           const tocNav = document.getElementById("toc-nav");
           if (!tocNav || tocNav.dataset.tocReady === "true") return;
-
-          const tocLinks = Array.from(tocNav.querySelectorAll(".toc-link"));
+          const tocLinks = Array.from(tocNav.querySelectorAll(".ds-toc-link"));
           if (!tocLinks.length) return;
-
           tocNav.dataset.tocReady = "true";
 
           const setActive = (slug) => {
             tocLinks.forEach((link) => {
-              const linkSlug = link.getAttribute("data-heading");
-              link.classList.toggle(activeClass, linkSlug === slug);
+              link.classList.toggle("is-active", link.getAttribute("data-heading") === slug);
             });
           };
-
-          const slugFromHash = () => window.location.hash.replace(/^#/, "");
-
-          const smoothScrollToHeading = (slug) => {
-            const target = document.getElementById(slug);
-            if (!target) return;
-
-            const headerOffset = 96;
-            const targetTop = target.getBoundingClientRect().top + window.scrollY - headerOffset;
-            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-            window.scrollTo({
-              top: Math.max(targetTop, 0),
-              behavior: reducedMotion ? "auto" : "smooth",
-            });
-          };
-
-          tocLinks.forEach((link) => {
-            link.addEventListener("click", (event) => {
-              const slug = link.getAttribute("data-heading");
-              if (!slug) return;
-
-              event.preventDefault();
-              setActive(slug);
-              smoothScrollToHeading(slug);
-              window.history.pushState(null, "", `#${slug}`);
-            });
-          });
 
           const headingElements = tocLinks
             .map((link) => link.getAttribute("data-heading"))
@@ -344,44 +404,26 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
                 const visible = entries
                   .filter((entry) => entry.isIntersecting)
                   .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-
-                if (visible?.target?.id) {
-                  setActive(visible.target.id);
-                }
+                if (visible?.target?.id) setActive(visible.target.id);
               },
-              {
-                rootMargin: "-20% 0px -65% 0px",
-                threshold: [0.1, 0.5, 1],
-              }
+              { rootMargin: "-15% 0px -70% 0px", threshold: [0.1, 0.5, 1] }
             );
-
-            headingElements.forEach((heading) => observer.observe(heading));
+            headingElements.forEach((el) => observer.observe(el));
           }
 
-          setActive(slugFromHash() || tocLinks[0].getAttribute("data-heading") || "");
-
-          window.addEventListener("hashchange", () => {
-            const slug = slugFromHash();
-            if (slug) setActive(slug);
-          });
+          setActive(window.location.hash.replace(/^#/, "") || tocLinks[0].getAttribute("data-heading") || "");
         };
-
-        document.addEventListener("astro:page-load", initToc);
-        initToc();
 
         const initSearch = () => {
           const input = document.getElementById("docs-search-input");
           const results = document.getElementById("docs-search-results");
           if (!(input instanceof HTMLInputElement) || !(results instanceof HTMLDivElement)) return;
           if (input.dataset.searchReady === "true") return;
-
           input.dataset.searchReady = "true";
 
           const allItems = JSON.parse(input.dataset.searchItems || "[]");
           let activeIndex = -1;
           let matches = [];
-
-          const normalize = (value) => String(value || "").toLowerCase().trim();
 
           const closeResults = () => {
             results.classList.add("hidden");
@@ -389,108 +431,92 @@ const active = currentSlug === "" ? "/docs" : `/docs/${currentSlug}`;
             activeIndex = -1;
           };
 
-          const openResults = () => {
-            results.classList.remove("hidden");
-          };
-
           const renderMatches = () => {
             results.innerHTML = "";
-
             if (!matches.length) {
               const empty = document.createElement("p");
-              empty.className = "px-3 py-2 text-sm text-[var(--muted)]";
-              empty.textContent = "No results found.";
+              empty.className = "px-3 py-2 text-[13px] text-[var(--ds-ink-faint)]";
+              empty.textContent = "No matching pages.";
               results.appendChild(empty);
-              openResults();
+              results.classList.remove("hidden");
               return;
             }
-
             matches.forEach((item, index) => {
               const link = document.createElement("a");
               link.href = item.href;
               link.className = "search-result-item block rounded-md px-3 py-2";
               if (index === activeIndex) link.classList.add("is-active");
-
               const titleEl = document.createElement("p");
-              titleEl.className = "m-0 text-sm font-semibold text-[var(--text)]";
+              titleEl.className = "m-0 text-[13px] font-medium text-[var(--ds-ink)]";
               titleEl.textContent = item.title;
               link.appendChild(titleEl);
-
               if (item.description) {
                 const descEl = document.createElement("p");
-                descEl.className = "m-0 mt-0.5 text-xs text-[var(--muted)]";
+                descEl.className = "m-0 mt-0.5 text-[12px] text-[var(--ds-ink-muted)] line-clamp-1";
                 descEl.textContent = item.description;
                 link.appendChild(descEl);
               }
-
               results.appendChild(link);
             });
-
-            openResults();
+            results.classList.remove("hidden");
           };
 
-          const updateSearch = (rawQuery) => {
-            const query = normalize(rawQuery);
-            if (!query) {
-              closeResults();
-              return;
-            }
-
+          const updateSearch = (raw) => {
+            const q = String(raw || "").toLowerCase().trim();
+            if (!q) return closeResults();
             matches = allItems
-              .filter((item) => {
-                const haystack = normalize(`${item.title} ${item.description || ""} ${item.slug}`);
-                return haystack.includes(query);
-              })
+              .filter((item) => `${item.title} ${item.description || ""} ${item.slug}`.toLowerCase().includes(q))
               .slice(0, 8);
-
             activeIndex = matches.length ? 0 : -1;
             renderMatches();
           };
 
-          input.addEventListener("input", () => {
-            updateSearch(input.value);
-          });
-
-          input.addEventListener("focus", () => {
-            if (input.value.trim()) updateSearch(input.value);
-          });
-
+          input.addEventListener("input", () => updateSearch(input.value));
+          input.addEventListener("focus", () => { if (input.value.trim()) updateSearch(input.value); });
           input.addEventListener("keydown", (event) => {
             if (results.classList.contains("hidden") || !matches.length) return;
-
             if (event.key === "ArrowDown") {
               event.preventDefault();
               activeIndex = (activeIndex + 1) % matches.length;
               renderMatches();
-            }
-
-            if (event.key === "ArrowUp") {
+            } else if (event.key === "ArrowUp") {
               event.preventDefault();
               activeIndex = (activeIndex - 1 + matches.length) % matches.length;
               renderMatches();
-            }
-
-            if (event.key === "Enter" && activeIndex >= 0) {
+            } else if (event.key === "Enter" && activeIndex >= 0) {
               event.preventDefault();
               window.location.href = matches[activeIndex].href;
-            }
-
-            if (event.key === "Escape") {
+            } else if (event.key === "Escape") {
               closeResults();
             }
           });
 
           document.addEventListener("click", (event) => {
-            const target = event.target;
-            if (!(target instanceof Node)) return;
-            if (!results.contains(target) && target !== input) {
+            if (event.target instanceof Node && !results.contains(event.target) && event.target !== input) {
               closeResults();
             }
           });
+
+          if (!window.__whisperDocsShortcutBound) {
+            window.__whisperDocsShortcutBound = true;
+            document.addEventListener("keydown", (event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+                event.preventDefault();
+                document.getElementById("docs-search-input")?.focus();
+              }
+            });
+          }
         };
 
-        document.addEventListener("astro:page-load", initSearch);
-        initSearch();
+        const boot = () => {
+          initTheme();
+          initCodeCopy();
+          initToc();
+          initSearch();
+        };
+
+        document.addEventListener("astro:page-load", boot);
+        boot();
       })();
     </script>
   </body>

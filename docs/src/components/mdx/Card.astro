@@ -6,9 +6,9 @@ interface Props {
 const { title } = Astro.props;
 ---
 
-<section class="card-bottom-line rounded-xl border border-[var(--line)] bg-[var(--panel)] p-5 transition">
-  <h3 class="mt-0 mb-1.5 text-base font-bold text-[var(--text)]">{title}</h3>
-  <div class="text-sm leading-relaxed text-[var(--muted)]">
+<section class="rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)] p-4">
+  <h3 class="m-0 text-[15px] font-semibold tracking-[-0.015em] text-[var(--ds-ink)]">{title}</h3>
+  <div class="mt-1.5 text-[13.5px] leading-[1.55] text-[var(--ds-ink-muted)] [&>p]:m-0">
     <slot />
   </div>
 </section>
