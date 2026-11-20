@@ -5,13 +5,32 @@ interface Props {
 
 const { type = "note" } = Astro.props;
 
-const classes = {
-  tip: "border-green-200 bg-green-50",
-  note: "border-blue-200 bg-blue-50",
-  caution: "border-amber-200 bg-amber-50"
+const styles = {
+  tip: {
+    box: "border-emerald-200 bg-emerald-50/70 text-emerald-950",
+    label: "Tip",
+    pill: "bg-emerald-600 text-white"
+  },
+  note: {
+    box: "border-[#FDBA74] bg-[#FFF7ED] text-[#0F172A]",
+    label: "Note",
+    pill: "bg-[#F97316] text-white"
+  },
+  caution: {
+    box: "border-amber-300 bg-amber-50/80 text-amber-950",
+    label: "Caution",
+    pill: "bg-amber-600 text-white"
+  }
 }[type];
 ---
 
-<aside class={`my-4 rounded-lg border p-4 text-sm text-gray-700 ${classes}`}>
-  <slot />
+<aside class={`my-5 rounded-xl border p-4 text-sm leading-relaxed ${styles.box}`}>
+  <div class="mb-1.5">
+    <span class={`inline-block rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${styles.pill}`}>
+      {styles.label}
+    </span>
+  </div>
+  <div class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0">
+    <slot />
+  </div>
 </aside>
