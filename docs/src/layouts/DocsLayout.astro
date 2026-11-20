@@ -53,13 +53,18 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script is:inline>
       (() => {
-        const stored = localStorage.getItem("whisper-docs-theme");
-        const theme = stored === "dark" || stored === "light"
-          ? stored
-          : window.matchMedia("(prefers-color-scheme: dark)").matches
-            ? "dark"
-            : "light";
-        document.documentElement.setAttribute("data-theme", theme);
+        const resolveTheme = () => {
+          const stored = localStorage.getItem("whisper-docs-theme");
+          if (stored === "dark" || stored === "light") return stored;
+          return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        };
+        document.documentElement.setAttribute("data-theme", resolveTheme());
+        if (!window.__whisperThemeSwapBound) {
+          window.__whisperThemeSwapBound = true;
+          document.addEventListener("astro:before-swap", (event) => {
+            event.newDocument.documentElement.setAttribute("data-theme", resolveTheme());
+          });
+        }
       })();
     </script>
     <ClientRouter />
