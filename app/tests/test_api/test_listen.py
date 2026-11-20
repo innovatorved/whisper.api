@@ -231,14 +231,17 @@ def test_listen_websocket_long_container_stream_uses_cumulative_decode(monkeypat
         meta = ws.receive_json()
         assert meta["type"] == "Metadata"
 
+        # Sleep well past the 50ms minimum container cadence (Windows monotonic
+        # clock ticks in ~15.6ms increments, so sleeping exactly 0.05s can
+        # measure <0.05s and deadlock receive_json).
         ws.send_bytes(webm_header + b"\x22" * 4096)
         drain_two(ws)
-        _time.sleep(0.05)
+        _time.sleep(0.1)
 
         for _ in range(3):
             ws.send_bytes(headerless_chunk)
             drain_two(ws)
-            _time.sleep(0.05)
+            _time.sleep(0.1)
 
         ws.send_json({"type": "CloseStream"})
         # CloseStream produces one final-only message (no interim).
